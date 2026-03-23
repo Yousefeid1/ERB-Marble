@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScaleForce — Start Your Journey</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0B3D91;--blue:#1A56C4;--mid:#378ADD;--light:#E6F1FB;
+  --white:#FFFFFF;--off:#F4F7FC;--dark:#0A1628;--gray:#6B7A99;
+  --border:rgba(26,86,196,0.12);--shadow:0 4px 32px rgba(11,61,145,0.10);
+  --font-head:'Syne',sans-serif;--font-body:'DM Sans',sans-serif;
+}
+html{scroll-behavior:smooth}
+body{font-family:var(--font-body);background:var(--navy);min-height:100vh;color:var(--dark);overflow-x:hidden}
+
+/* Background */
+.bg{position:fixed;inset:0;pointer-events:none;z-index:0}
+.bg-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(55,138,221,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(55,138,221,0.06) 1px,transparent 1px);background-size:60px 60px}
+.bg-c1{position:absolute;width:600px;height:600px;border-radius:50%;background:rgba(26,86,196,0.2);top:-200px;right:-150px;animation:float 8s ease-in-out infinite}
+.bg-c2{position:absolute;width:400px;height:400px;border-radius:50%;background:rgba(55,138,221,0.12);bottom:-100px;left:-100px;animation:float 10s ease-in-out infinite reverse}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-30px)}}
+
+/* Layout */
+.page{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:40px 20px 60px}
+
+/* Logo */
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;margin-bottom:48px}
+.logo-sym{width:38px;height:38px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);border-radius:10px;display:flex;align-items:center;justify-content:center}
+.logo-sym svg{width:22px;height:22px}
+.logo-name{font-family:var(--font-head);font-size:22px;font-weight:700;color:var(--white);letter-spacing:-0.3px}
+.logo-name span{color:var(--mid)}
+
+/* Hero text */
+.hero{text-align:center;margin-bottom:48px;max-width:560px}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.8);font-size:12px;font-weight:500;padding:5px 14px 5px 8px;border-radius:30px;margin-bottom:20px}
+.badge-dot{width:7px;height:7px;background:#4ADE80;border-radius:50%;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
+.hero h1{font-family:var(--font-head);font-size:clamp(32px,5vw,52px);font-weight:800;color:var(--white);letter-spacing:-1.5px;line-height:1.05;margin-bottom:16px}
+.hero h1 span{color:var(--mid)}
+.hero p{font-size:17px;color:rgba(255,255,255,0.65);line-height:1.7}
+
+/* Steps indicator */
+.steps-bar{display:flex;align-items:center;gap:0;margin-bottom:40px}
+.step-item{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:rgba(255,255,255,0.35)}
+.step-item.active{color:var(--white)}
+.step-item.done{color:rgba(255,255,255,0.6)}
+.step-num{width:28px;height:28px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.step-item.active .step-num{background:var(--blue);border-color:var(--blue);color:var(--white)}
+.step-item.done .step-num{background:rgba(74,222,128,0.2);border-color:#4ADE80;color:#4ADE80}
+.step-line{width:40px;height:1.5px;background:rgba(255,255,255,0.15);margin:0 4px}
+.step-line.done{background:rgba(74,222,128,0.4)}
+
+/* Card */
+.form-card{background:var(--white);border-radius:20px;padding:40px;width:100%;max-width:620px;box-shadow:0 20px 60px rgba(0,0,0,0.25)}
+.card-title{font-family:var(--font-head);font-size:22px;font-weight:800;color:var(--navy);margin-bottom:6px;letter-spacing:-0.5px}
+.card-sub{font-size:14px;color:var(--gray);margin-bottom:28px;line-height:1.6}
+
+/* Form elements */
+.form-step{display:none}
+.form-step.active{display:block;animation:fadeIn 0.3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.field{margin-bottom:20px}
+.field label{display:block;font-size:13px;font-weight:500;color:var(--navy);margin-bottom:7px}
+.field label span{color:#E24B4A;margin-left:2px}
+.field input,.field textarea,.field select{
+  width:100%;padding:13px 16px;border:1.5px solid var(--border);
+  border-radius:10px;font-family:var(--font-body);font-size:14px;
+  color:var(--dark);background:var(--off);transition:all 0.2s;outline:none
+}
+.field input:focus,.field textarea:focus,.field select:focus{
+  border-color:var(--blue);background:var(--white);
+  box-shadow:0 0 0 3px rgba(26,86,196,0.1)
+}
+.field textarea{resize:vertical;min-height:100px}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* Checkbox group */
+.check-group{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.check-item{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--off);border:1.5px solid var(--border);border-radius:10px;cursor:pointer;transition:all 0.2s;font-size:14px;color:var(--dark)}
+.check-item:hover{border-color:var(--blue);background:var(--light)}
+.check-item input[type=checkbox]{width:16px;height:16px;accent-color:var(--blue);flex-shrink:0}
+.check-item.selected{border-color:var(--blue);background:var(--light)}
+
+/* Radio group */
+.radio-group{display:flex;flex-direction:column;gap:10px}
+.radio-item{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--off);border:1.5px solid var(--border);border-radius:10px;cursor:pointer;transition:all 0.2s;font-size:14px;color:var(--dark)}
+.radio-item:hover{border-color:var(--blue);background:var(--light)}
+.radio-item input[type=radio]{width:16px;height:16px;accent-color:var(--blue);flex-shrink:0}
+.radio-item.selected{border-color:var(--blue);background:var(--light)}
+.radio-label{flex:1}
+.radio-label strong{display:block;font-weight:500;color:var(--navy)}
+.radio-label small{font-size:12px;color:var(--gray)}
+
+/* Buttons */
+.btn-row{display:flex;gap:12px;margin-top:28px}
+.btn{padding:14px 28px;border-radius:10px;font-family:var(--font-head);font-size:15px;font-weight:700;cursor:pointer;transition:all 0.25s;border:none;flex:1}
+.btn-next{background:var(--blue);color:var(--white)}
+.btn-next:hover{background:var(--navy);transform:translateY(-2px);box-shadow:0 8px 24px rgba(26,86,196,0.3)}
+.btn-next:disabled{background:var(--gray);transform:none;box-shadow:none;cursor:not-allowed}
+.btn-back{background:var(--off);color:var(--gray);border:1.5px solid var(--border);flex:0.4}
+.btn-back:hover{background:var(--light);color:var(--blue);border-color:var(--blue)}
+.btn-submit{background:linear-gradient(135deg,var(--navy),var(--blue));color:var(--white);width:100%}
+.btn-submit:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(26,86,196,0.4)}
+
+/* Progress bar */
+.progress{height:3px;background:var(--border);border-radius:2px;margin-bottom:28px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--blue),var(--mid));border-radius:2px;transition:width 0.4s ease}
+
+/* Success screen */
+.success{display:none;text-align:center;padding:20px 0}
+.success-icon{width:72px;height:72px;background:linear-gradient(135deg,#4ADE80,#16A34A);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 24px;font-size:32px}
+.success h2{font-family:var(--font-head);font-size:26px;font-weight:800;color:var(--navy);margin-bottom:10px}
+.success p{font-size:15px;color:var(--gray);line-height:1.7;margin-bottom:24px}
+.success-details{background:var(--off);border-radius:12px;padding:16px 20px;text-align:left;font-size:13px;color:var(--gray);line-height:1.8;margin-bottom:24px}
+.success-details strong{color:var(--navy)}
+
+/* Char counter */
+.char-count{font-size:11px;color:var(--gray);text-align:right;margin-top:4px}
+
+/* Error */
+.field-error{font-size:12px;color:#E24B4A;margin-top:4px;display:none}
+.field.error input,.field.error textarea,.field.error select{border-color:#E24B4A;background:#FEF2F2}
+.field.error .field-error{display:block}
+
+/* Loading */
+.loading{display:none;text-align:center;padding:20px}
+.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+@media(max-width:600px){
+  .form-card{padding:24px}
+  .field-row,.check-group{grid-template-columns:1fr}
+  .steps-bar{gap:0}
+  .step-line{width:24px}
+}
+</style>
+</head>
+<body>
+<div class="bg">
+  <div class="bg-grid"></div>
+  <div class="bg-c1"></div>
+  <div class="bg-c2"></div>
+</div>
+
+<div class="page">
+
+  <!-- Logo -->
+  <a href="index.html" class="logo">
+    <div class="logo-sym">
+      <svg viewBox="0 0 20 20" fill="none">
+        <path d="M7 14 Q7 9 10 8 Q13 7 13 4.5 Q13 3 11.5 2.5" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M7 14 Q7 16.5 10 17 Q13 17.5 13 15" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="10.3" y1="15.8" x2="10.3" y2="2.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        <polyline points="7.5,6.5 10.3,2.5 13,6.5" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <span class="logo-name">Scale<span>Force</span></span>
+  </a>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-badge"><div class="badge-dot"></div>Free — No commitment</div>
+    <h1>Let's <span>Scale</span> Your Business</h1>
+    <p>Fill in the form below and we'll get back to you within 24 hours with a tailored plan for your business.</p>
+  </div>
+
+  <!-- Steps bar -->
+  <div class="steps-bar" id="stepsBar">
+    <div class="step-item active" id="si1"><div class="step-num">1</div><span>Info</span></div>
+    <div class="step-line" id="sl1"></div>
+    <div class="step-item" id="si2"><div class="step-num">2</div><span>Business</span></div>
+    <div class="step-line" id="sl2"></div>
+    <div class="step-item" id="si3"><div class="step-num">3</div><span>Goals</span></div>
+    <div class="step-line" id="sl3"></div>
+    <div class="step-item" id="si4"><div class="step-num">4</div><span>Service</span></div>
+  </div>
+
+  <!-- Form Card -->
+  <div class="form-card">
+    <div class="progress"><div class="progress-fill" id="progressFill" style="width:25%"></div></div>
+
+    <!-- Step 1: Personal Info -->
+    <div class="form-step active" id="step1">
+      <div class="card-title">Your Information</div>
+      <div class="card-sub">Tell us who you are so we can personalize our response.</div>
+      <div class="field-row">
+        <div class="field" id="f-name">
+          <label>Full Name <span>*</span></label>
+          <input type="text" id="name" placeholder="Ahmed Mohamed" oninput="clearError('f-name')">
+          <div class="field-error">Please enter your name</div>
+        </div>
+        <div class="field" id="f-phone">
+          <label>WhatsApp Number <span>*</span></label>
+          <input type="tel" id="phone" placeholder="+20 1XX XXX XXXX" oninput="clearError('f-phone')">
+          <div class="field-error">Please enter your number</div>
+        </div>
+      </div>
+      <div class="field" id="f-email">
+        <label>Email Address <span>*</span></label>
+        <input type="email" id="email" placeholder="you@email.com" oninput="clearError('f-email')">
+        <div class="field-error">Please enter a valid email</div>
+      </div>
+      <div class="field">
+        <label>How did you hear about us?</label>
+        <select id="source">
+          <option value="">Select...</option>
+          <option>Facebook</option>
+          <option>Instagram</option>
+          <option>LinkedIn</option>
+          <option>WhatsApp</option>
+          <option>Google</option>
+          <option>Friend / Referral</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="btn-row"><button class="btn btn-next" onclick="nextStep(1)">Continue →</button></div>
+    </div>
+
+    <!-- Step 2: Business Info -->
+    <div class="form-step" id="step2">
+      <div class="card-title">Your Business</div>
+      <div class="card-sub">Tell us about your business so we understand your market.</div>
+      <div class="field-row">
+        <div class="field" id="f-bname">
+          <label>Business Name <span>*</span></label>
+          <input type="text" id="bname" placeholder="Your business name" oninput="clearError('f-bname')">
+          <div class="field-error">Please enter your business name</div>
+        </div>
+        <div class="field" id="f-btype">
+          <label>Business Type <span>*</span></label>
+          <select id="btype" onchange="clearError('f-btype')">
+            <option value="">Select...</option>
+            <option>Retail Store</option>
+            <option>Restaurant / Cafe</option>
+            <option>Online Store</option>
+            <option>Service Business</option>
+            <option>Clinic / Medical</option>
+            <option>Real Estate</option>
+            <option>Education / Training</option>
+            <option>Freelancer</option>
+            <option>Startup</option>
+            <option>Other</option>
+          </select>
+          <div class="field-error">Please select your business type</div>
+        </div>
+      </div>
+      <div class="field" id="f-bdesc">
+        <label>What does your business do? <span>*</span></label>
+        <textarea id="bdesc" placeholder="Describe your products or services in a few lines..." oninput="updateCount('bdesc','bc1');clearError('f-bdesc')"></textarea>
+        <div class="char-count"><span id="bc1">0</span>/300</div>
+        <div class="field-error">Please describe your business</div>
+      </div>
+      <div class="field">
+        <label>Social Media / Website (if any)</label>
+        <input type="text" id="social" placeholder="facebook.com/yourbusiness or your website URL">
+      </div>
+      <div class="field">
+        <label>How long have you been in business?</label>
+        <select id="age">
+          <option value="">Select...</option>
+          <option>Just starting (less than 6 months)</option>
+          <option>6 months – 1 year</option>
+          <option>1 – 3 years</option>
+          <option>3 – 5 years</option>
+          <option>More than 5 years</option>
+        </select>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-back" onclick="prevStep(2)">← Back</button>
+        <button class="btn btn-next" onclick="nextStep(2)">Continue →</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Goals & Challenges -->
+    <div class="form-step" id="step3">
+      <div class="card-title">Goals & Challenges</div>
+      <div class="card-sub">Help us understand what you need so we can build the right plan.</div>
+      <div class="field" id="f-challenge">
+        <label>What's your biggest challenge right now? <span>*</span></label>
+        <div class="check-group" id="challengeGroup">
+          <label class="check-item" onclick="toggleCheck(this)">
+            <input type="checkbox" value="No social media presence"> No social media presence
+          </label>
+          <label class="check-item" onclick="toggleCheck(this)">
+            <input type="checkbox" value="Low engagement & reach"> Low engagement & reach
+          </label>
+          <label class="check-item" onclick="toggleCheck(this)">
+            <input type="checkbox" value="No website"> No website
+          </label>
+          <label class="check-item" onclick="toggleCheck(this)">
+            <input type="checkbox" value="Weak website"> Weak / outdated website
+          </label>
+          <label class="check-item" onclick="toggleCheck(this)">
+            <input type="checkbox" value="No marketing strategy"> No clear marketing strategy
+          </label>
+          <label class="check-item" onclick="toggleCheck(this)">
+            <input type="checkbox" value="Low sales"> Low sales / conversions
+          </label>
+          <label class="check-item" onclick="toggleCheck(this)">
+            <input type="checkbox" value="Operations management"> Operations management
+          </label>
+          <label class="check-item" onclick="toggleCheck(this)">
+            <input type="checkbox" value="Competition"> Strong competition
+          </label>
+        </div>
+        <div class="field-error">Please select at least one challenge</div>
+      </div>
+      <div class="field">
+        <label>What's your main goal in the next 3 months?</label>
+        <textarea id="goal" placeholder="e.g. Get more customers, increase online presence, launch new product..." oninput="updateCount('goal','bc2')"></textarea>
+        <div class="char-count"><span id="bc2">0</span>/300</div>
+      </div>
+      <div class="field">
+        <label>What's your monthly marketing budget?</label>
+        <select id="budget">
+          <option value="">Prefer not to say</option>
+          <option>Less than 1,000 EGP</option>
+          <option>1,000 – 3,000 EGP</option>
+          <option>3,000 – 7,000 EGP</option>
+          <option>7,000 – 15,000 EGP</option>
+          <option>More than 15,000 EGP</option>
+        </select>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-back" onclick="prevStep(3)">← Back</button>
+        <button class="btn btn-next" onclick="nextStep(3)">Continue →</button>
+      </div>
+    </div>
+
+    <!-- Step 4: Service Selection -->
+    <div class="form-step" id="step4">
+      <div class="card-title">Which service interests you?</div>
+      <div class="card-sub">Choose the service that fits your needs — or go with the full bundle.</div>
+      <div class="field" id="f-service">
+        <div class="radio-group" id="serviceGroup">
+          <label class="radio-item" onclick="selectRadio(this,'serviceGroup')">
+            <input type="radio" name="service" value="Social Media Management">
+            <div class="radio-label">
+              <strong>📱 Social Media Management</strong>
+              <small>Strategy, content, design & community — starting from 7,500 EGP/month</small>
+            </div>
+          </label>
+          <label class="radio-item" onclick="selectRadio(this,'serviceGroup')">
+            <input type="radio" name="service" value="Website Creation">
+            <div class="radio-label">
+              <strong>🌐 Website Creation</strong>
+              <small>Fast, mobile-first website delivered in 14 days — starting from 12,000 EGP</small>
+            </div>
+          </label>
+          <label class="radio-item" onclick="selectRadio(this,'serviceGroup')">
+            <input type="radio" name="service" value="Marketing Strategy">
+            <div class="radio-label">
+              <strong>🎯 Marketing Strategy</strong>
+              <small>Full market analysis & 3-month plan — starting from 4,500 EGP</small>
+            </div>
+          </label>
+          <label class="radio-item" onclick="selectRadio(this,'serviceGroup')">
+            <input type="radio" name="service" value="Business Management">
+            <div class="radio-label">
+              <strong>📊 Business Management</strong>
+              <small>Operations, reports & consulting — starting from 6,600 EGP/month</small>
+            </div>
+          </label>
+          <label class="radio-item" onclick="selectRadio(this,'serviceGroup')" style="border-color:rgba(26,86,196,0.3);background:var(--light)">
+            <input type="radio" name="service" value="All-in-One Bundle">
+            <div class="radio-label">
+              <strong>💼 All-in-One Growth Bundle</strong>
+              <small>All 4 services — Save 4,000 EGP on the bundle price</small>
+            </div>
+          </label>
+          <label class="radio-item" onclick="selectRadio(this,'serviceGroup')">
+            <input type="radio" name="service" value="Not sure yet">
+            <div class="radio-label">
+              <strong>🤔 Not sure yet</strong>
+              <small>Talk to us and we'll recommend the best option</small>
+            </div>
+          </label>
+        </div>
+        <div class="field-error">Please select a service</div>
+      </div>
+      <div class="field">
+        <label>Anything else you'd like us to know?</label>
+        <textarea id="notes" placeholder="Any additional details, questions, or special requirements..." oninput="updateCount('notes','bc3')"></textarea>
+        <div class="char-count"><span id="bc3">0</span>/500</div>
+      </div>
+      <div class="field">
+        <label>Preferred contact time</label>
+        <select id="contactTime">
+          <option value="">Any time">Any time</option>
+          <option>Morning (9AM – 12PM)</option>
+          <option>Afternoon (12PM – 4PM)</option>
+          <option>Evening (4PM – 8PM)</option>
+        </select>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-back" onclick="prevStep(4)">← Back</button>
+      </div>
+      <button class="btn btn-submit" onclick="submitForm()" style="margin-top:12px">
+        🚀 Submit & Get Your Free Consultation
+      </button>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading" id="loadingScreen">
+      <div class="spinner"></div>
+      <p style="color:var(--gray);font-size:14px">Sending your information...</p>
+    </div>
+
+    <!-- Success -->
+    <div class="success" id="successScreen">
+      <div class="success-icon">✓</div>
+      <h2>We've received your request!</h2>
+      <p>Thank you for reaching out. Our team will contact you within <strong>24 hours</strong> to discuss your business and create a tailored plan.</p>
+      <div class="success-details" id="successSummary"></div>
+      <a href="index.html" style="display:inline-block;background:var(--blue);color:white;padding:14px 28px;border-radius:10px;text-decoration:none;font-family:var(--font-head);font-weight:700;font-size:15px;transition:all 0.25s" onmouseover="this.style.background='#0B3D91'" onmouseout="this.style.background='#1A56C4'">← Back to ScaleForce</a>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Config — Replace with your real values ──────
+const TELEGRAM_BOT_TOKEN = '8350390838:AAEurfYHJHuhSQWwLjuOykvPTWM1njD60ng';
+const TELEGRAM_CHAT_ID   = '5764585492';
+// ────────────────────────────────────────────────
+
+let currentStep = 1;
+const totalSteps = 4;
+
+function updateProgress(step) {
+  document.getElementById('progressFill').style.width = (step / totalSteps * 100) + '%';
+  for (let i = 1; i <= totalSteps; i++) {
+    const si = document.getElementById('si' + i);
+    si.classList.remove('active', 'done');
+    if (i === step) si.classList.add('active');
+    else if (i < step) si.classList.add('done');
+    if (i < totalSteps) {
+      const sl = document.getElementById('sl' + i);
+      sl.classList.toggle('done', i < step);
+    }
+  }
+}
+
+function validateStep(step) {
+  let valid = true;
+  if (step === 1) {
+    if (!document.getElementById('name').value.trim()) { showError('f-name'); valid = false; }
+    if (!document.getElementById('phone').value.trim()) { showError('f-phone'); valid = false; }
+    const email = document.getElementById('email').value;
+    if (!email || !email.includes('@')) { showError('f-email'); valid = false; }
+  }
+  if (step === 2) {
+    if (!document.getElementById('bname').value.trim()) { showError('f-bname'); valid = false; }
+    if (!document.getElementById('btype').value) { showError('f-btype'); valid = false; }
+    if (!document.getElementById('bdesc').value.trim()) { showError('f-bdesc'); valid = false; }
+  }
+  if (step === 3) {
+    const checks = document.querySelectorAll('#challengeGroup input:checked');
+    if (checks.length === 0) { showError('f-challenge'); valid = false; }
+  }
+  if (step === 4) {
+    const radio = document.querySelector('#serviceGroup input:checked');
+    if (!radio) { showError('f-service'); valid = false; }
+  }
+  return valid;
+}
+
+function showError(id) {
+  document.getElementById(id).classList.add('error');
+}
+function clearError(id) {
+  document.getElementById(id).classList.remove('error');
+}
+
+function nextStep(step) {
+  if (!validateStep(step)) return;
+  document.getElementById('step' + step).classList.remove('active');
+  currentStep = step + 1;
+  document.getElementById('step' + currentStep).classList.add('active');
+  updateProgress(currentStep);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function prevStep(step) {
+  document.getElementById('step' + step).classList.remove('active');
+  currentStep = step - 1;
+  document.getElementById('step' + currentStep).classList.add('active');
+  updateProgress(currentStep);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function toggleCheck(el) {
+  el.classList.toggle('selected');
+  clearError('f-challenge');
+}
+
+function selectRadio(el, groupId) {
+  document.querySelectorAll('#' + groupId + ' .radio-item').forEach(r => r.classList.remove('selected'));
+  el.classList.add('selected');
+  clearError('f-service');
+}
+
+function updateCount(inputId, countId) {
+  const val = document.getElementById(inputId).value.length;
+  document.getElementById(countId).textContent = val;
+}
+
+async function submitForm() {
+  if (!validateStep(4)) return;
+
+  const challenges = [...document.querySelectorAll('#challengeGroup input:checked')].map(c => c.value).join(', ');
+  const service = document.querySelector('#serviceGroup input:checked')?.value || '';
+
+  const data = {
+    name:        document.getElementById('name').value,
+    phone:       document.getElementById('phone').value,
+    email:       document.getElementById('email').value,
+    source:      document.getElementById('source').value || 'Not specified',
+    bname:       document.getElementById('bname').value,
+    btype:       document.getElementById('btype').value,
+    bdesc:       document.getElementById('bdesc').value,
+    social:      document.getElementById('social').value || 'Not provided',
+    age:         document.getElementById('age').value || 'Not specified',
+    challenges,
+    goal:        document.getElementById('goal').value || 'Not specified',
+    budget:      document.getElementById('budget').value || 'Not specified',
+    service,
+    notes:       document.getElementById('notes').value || 'None',
+    contactTime: document.getElementById('contactTime').value || 'Any time',
+    submittedAt: new Date().toLocaleString('en-EG', { timeZone: 'Africa/Cairo' })
+  };
+
+  const message = `
+🚀 *NEW CLIENT REQUEST — ScaleForce*
+━━━━━━━━━━━━━━━━━━━━━
+
+👤 *CONTACT INFO*
+• Name: ${data.name}
+• WhatsApp: ${data.phone}
+• Email: ${data.email}
+• Source: ${data.source}
+
+🏢 *BUSINESS INFO*
+• Business: ${data.bname}
+• Type: ${data.btype}
+• Age: ${data.age}
+• Description: ${data.bdesc}
+• Social/Website: ${data.social}
+
+⚡ *CHALLENGES*
+${data.challenges}
+
+🎯 *GOALS & BUDGET*
+• Goal: ${data.goal}
+• Budget: ${data.budget}
+
+💼 *SERVICE REQUESTED*
+${data.service}
+
+📝 *NOTES*
+${data.notes}
+
+🕐 *Best contact time:* ${data.contactTime}
+📅 *Submitted:* ${data.submittedAt}
+
+━━━━━━━━━━━━━━━━━━━━━
+Reply within 24 hours ⏰
+  `.trim();
+
+  // Show loading
+  document.getElementById('step4').classList.remove('active');
+  document.getElementById('loadingScreen').style.display = 'block';
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: message,
+        parse_mode: 'Markdown'
+      })
+    });
+
+    const result = await res.json();
+    document.getElementById('loadingScreen').style.display = 'none';
+
+    if (result.ok) {
+      document.getElementById('successSummary').innerHTML = `
+        <strong>Name:</strong> ${data.name}<br>
+        <strong>Business:</strong> ${data.bname}<br>
+        <strong>Service:</strong> ${data.service}<br>
+        <strong>WhatsApp:</strong> ${data.phone}<br>
+        <strong>Submitted:</strong> ${data.submittedAt}
+      `;
+      document.getElementById('successScreen').style.display = 'block';
+      document.getElementById('stepsBar').style.display = 'none';
+      document.getElementById('progressFill').parentElement.style.display = 'none';
+    } else {
+      throw new Error('Telegram API error');
+    }
+  } catch (err) {
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('step4').classList.add('active');
+    alert('Something went wrong. Please try again or contact us directly on WhatsApp.');
+    console.error(err);
+  }
+}
+</script>
+</body>
+</html>
