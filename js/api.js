@@ -25,6 +25,7 @@ const SEED_DATA = {
     company_name: 'شركة الرخام والجرانيت',
     currency: 'EGP',
     tax_rate: 14,
+    exchange_rate: 31,
     address: 'القاهرة، مصر',
     phone: '01234567890',
     email: 'info@marble.com'
@@ -146,9 +147,15 @@ const SEED_DATA = {
     { id: 3, name: 'مستودع مواد خام',     location: 'القاهرة - مدينة بدر', manager: 'خالد موظف تصنيع', capacity: 8000, status: 'active', notes: 'تخزين البلوكات الخام قبل التصنيع' },
   ],
   shipments: [
-    { id: 1, shipment_number: 'SHP-2024-001', invoice_id: 1, invoice_number: 'INV-2024-001', customer: 'مقاولون مصر للإنشاء', origin: 'المستودع الرئيسي', destination: 'القاهرة - مشروع فيلا الساحل', driver: 'عمرو السائق', vehicle: 'نقل ثقيل - ق ج ن 123', weight_tons: 5.5, shipment_date: '2024-02-12', delivery_date: '2024-02-13', status: 'delivered', notes: 'تم التسليم بسلامة' },
-    { id: 2, shipment_number: 'SHP-2024-002', invoice_id: 2, invoice_number: 'INV-2024-002', customer: 'شركة الإعمار المصرية', origin: 'المستودع الرئيسي', destination: 'الجيزة - برج الإعمار', driver: 'حسن السائق', vehicle: 'نقل ثقيل - ق م ص 456', weight_tons: 12.0, shipment_date: '2024-02-25', delivery_date: null, status: 'in_transit', notes: 'في الطريق' },
-    { id: 3, shipment_number: 'SHP-2024-003', invoice_id: 3, invoice_number: 'INV-2024-003', customer: 'مشاريع النيل العقارية', origin: 'المستودع الرئيسي', destination: 'الإسكندرية - كمباوند النيل', driver: 'عمرو السائق', vehicle: 'نقل ثقيل - ق ج ن 123', weight_tons: 3.6, shipment_date: '2024-03-10', delivery_date: null, status: 'pending', notes: 'في انتظار التحميل' },
+    { id: 1, shipment_number: 'SHP-2024-001', invoice_id: 1, invoice_number: 'INV-2024-001', customer: 'مقاولون مصر للإنشاء', origin: 'المستودع الرئيسي', destination: 'القاهرة - مشروع فيلا الساحل', driver: 'عمرو السائق', vehicle: 'نقل ثقيل - ق ج ن 123', weight_tons: 5.5, bill_of_lading: 'BOL-2024-001', receiver: 'مهندس أحمد محمود', shipment_date: '2024-02-12', delivery_date: '2024-02-13', status: 'delivered', notes: 'تم التسليم بسلامة' },
+    { id: 2, shipment_number: 'SHP-2024-002', invoice_id: 2, invoice_number: 'INV-2024-002', customer: 'شركة الإعمار المصرية', origin: 'المستودع الرئيسي', destination: 'الجيزة - برج الإعمار', driver: 'حسن السائق', vehicle: 'نقل ثقيل - ق م ص 456', weight_tons: 12.0, bill_of_lading: 'BOL-2024-002', receiver: 'مهندس سامي علي', shipment_date: '2024-02-25', delivery_date: null, status: 'in_transit', notes: 'في الطريق' },
+    { id: 3, shipment_number: 'SHP-2024-003', invoice_id: 3, invoice_number: 'INV-2024-003', customer: 'مشاريع النيل العقارية', origin: 'المستودع الرئيسي', destination: 'الإسكندرية - كمباوند النيل', driver: 'عمرو السائق', vehicle: 'نقل ثقيل - ق ج ن 123', weight_tons: 3.6, bill_of_lading: null, receiver: null, shipment_date: '2024-03-10', delivery_date: null, status: 'pending', notes: 'في انتظار التحميل' },
+  ],
+  warehouse_inventory: [
+    { id: 1, warehouse_id: 1, product_id: 1, product_code: 'MBL-001', product_name: 'رخام أبيض كراراني', qty: 150, min_qty: 30 },
+    { id: 2, warehouse_id: 1, product_id: 2, product_code: 'GRN-001', product_name: 'جرانيت أسود مطلق',  qty: 100, min_qty: 20 },
+    { id: 3, warehouse_id: 2, product_id: 3, product_code: 'MBL-002', product_name: 'رخام بيج تونسي',    qty: 30,  min_qty: 20 },
+    { id: 4, warehouse_id: 3, product_id: 4, product_code: 'GRN-002', product_name: 'جرانيت رمادي صواني', qty: 200, min_qty: 40 },
   ],
 };
 
@@ -173,8 +180,20 @@ const DB = {
     // Migration: add activity_log if missing
     if (!this.get('activity_log')) this.set('activity_log', []);
     // Migration: add warehouses/shipments if missing
-    if (!this.get('warehouses')) this.set('warehouses', SEED_DATA.warehouses);
-    if (!this.get('shipments'))  this.set('shipments',  SEED_DATA.shipments);
+    if (!this.get('warehouses'))          this.set('warehouses',          SEED_DATA.warehouses);
+    if (!this.get('shipments'))           this.set('shipments',           SEED_DATA.shipments);
+    if (!this.get('warehouse_inventory')) this.set('warehouse_inventory', SEED_DATA.warehouse_inventory);
+    // Migration: add exchange_rate to settings if missing
+    const _settings = this.get('settings') || SEED_DATA.settings;
+    if (!('exchange_rate' in _settings)) { _settings.exchange_rate = 31; this.set('settings', _settings); }
+    // Migration: add bill_of_lading/receiver to existing shipments if missing
+    const _shipments = this.getAll('shipments');
+    let shipsMigrated = false;
+    _shipments.forEach(s => {
+      if (!('bill_of_lading' in s)) { s.bill_of_lading = null; shipsMigrated = true; }
+      if (!('receiver'       in s)) { s.receiver       = null; shipsMigrated = true; }
+    });
+    if (shipsMigrated) this.set('shipments', _shipments);
     // Migration: add missing fields to existing users
     const users = this.getAll('users');
     let usersMigrated = false;
@@ -546,10 +565,62 @@ const api = {
     const s = DB.findById('shipments', id);
     if (!s) throw new Error('الشحنة غير موجودة');
     s.status = newStatus;
-    if (newStatus === 'delivered') s.delivery_date = new Date().toISOString().split('T')[0];
+    if (newStatus === 'delivered') {
+      s.delivery_date = new Date().toISOString().split('T')[0];
+      // Auto-update linked sale invoice status
+      if (s.invoice_id) {
+        const inv = DB.findById('sales', s.invoice_id);
+        if (inv && inv.status !== 'cancelled' && inv.status !== 'rejected') {
+          const newInvStatus = inv.paid_amount >= inv.total_amount ? 'paid' : 'sent';
+          if (inv.status !== newInvStatus) {
+            inv.status = newInvStatus;
+            DB.save('sales', inv);
+            this.logActivity('update', 'sale', inv.id, `تحديث حالة الفاتورة ${inv.invoice_number} تلقائياً عند اكتمال الشحن`);
+            DB.save('notifications', { id: DB.nextId('notifications'), title: 'اكتمال الشحن', message: `تم تسليم الشحنة ${s.shipment_number} وتحديث الفاتورة ${inv.invoice_number}`, type: 'success', is_read: false, created_at: new Date().toISOString() });
+          }
+        }
+      }
+    }
     DB.save('shipments', s);
     this.logActivity('update', 'logistics', parseInt(id), `تحديث حالة شحنة ${s.shipment_number}: ${newStatus}`);
     return s;
+  },
+
+  // ===== WAREHOUSE INVENTORY =====
+  async warehouseInventory(warehouseId) {
+    return DB.getAll('warehouse_inventory').filter(i => i.warehouse_id === parseInt(warehouseId));
+  },
+  async addWarehouseStock(warehouseId, data) {
+    const { product_id, product_code, product_name, qty, min_qty } = data;
+    if (!product_id || !qty || qty <= 0) throw new Error('بيانات غير صحيحة');
+    const items = DB.getAll('warehouse_inventory');
+    const existing = items.find(i => i.warehouse_id === parseInt(warehouseId) && i.product_id === parseInt(product_id));
+    if (existing) {
+      existing.qty += parseFloat(qty);
+      DB.save('warehouse_inventory', existing);
+      this.logActivity('update', 'logistics', existing.id, `إضافة ${qty} وحدة من ${product_name} للمستودع`);
+      return existing;
+    } else {
+      const item = DB.save('warehouse_inventory', { id: DB.nextId('warehouse_inventory'), warehouse_id: parseInt(warehouseId), product_id: parseInt(product_id), product_code: product_code || '', product_name: product_name || '', qty: parseFloat(qty), min_qty: parseFloat(min_qty) || 0 });
+      this.logActivity('create', 'logistics', item.id, `إضافة منتج ${product_name} للمستودع`);
+      return item;
+    }
+  },
+  async adjustWarehouseStock(itemId, newQty) {
+    const item = DB.findById('warehouse_inventory', itemId);
+    if (!item) throw new Error('البند غير موجود');
+    const oldQty = item.qty;
+    item.qty = parseFloat(newQty);
+    if (item.qty < 0) throw new Error('لا يمكن أن تكون الكمية سالبة');
+    DB.save('warehouse_inventory', item);
+    this.logActivity('update', 'logistics', itemId, `تعديل كمية ${item.product_name}: ${oldQty} → ${newQty}`);
+    return item;
+  },
+  async deleteWarehouseInventoryItem(itemId) {
+    const item = DB.findById('warehouse_inventory', itemId);
+    if (!item) throw new Error('البند غير موجود');
+    DB.remove('warehouse_inventory', itemId);
+    this.logActivity('update', 'logistics', itemId, `حذف منتج ${item.product_name} من المستودع`);
   },
 
   // ===== NOTIFICATIONS =====
