@@ -80,15 +80,47 @@ async function filterPayments() {
   document.getElementById('pay-tbody').innerHTML = renderPaymentRows(data);
 }
 
-function openNewPaymentModal(type) {
-  const isReceipt  = type === 'receipt';
-  const customers  = window._paymentsCustomers || [];
-  const suppliers  = window._paymentsSuppliers || [];
-  const parties    = isReceipt ? customers : suppliers;
-  const partyType  = isReceipt ? 'customer' : 'supplier';
+async function openNewPaymentModal(type) {
+  const isReceipt = type === 'receipt';
+  const customers = window._paymentsCustomers || [];
+  const suppliers = window._paymentsSuppliers || [];
+  const parties   = isReceipt ? customers : suppliers;
+  const partyType = isReceipt ? 'customer' : 'supplier';
+
+  // Load unpaid/partial invoices for linking
+  let invoices = [];
+  try {
+    if (isReceipt) {
+      const { data } = await api.sales();
+      invoices = data.filter(s => s.status !== 'paid' && s.status !== 'cancelled' && s.total_amount > s.paid_amount);
+    } else {
+      const { data } = await api.purchases();
+      invoices = data.filter(p => p.status !== 'paid' && p.total_amount > p.paid_amount);
+    }
+  } catch(e) {}
+
+  const invoiceOptions = invoices.map(inv => {
+    const remaining = inv.total_amount - inv.paid_amount;
+    const partyName = isReceipt ? inv.customer : inv.supplier;
+    const partyId   = isReceipt ? inv.customer_id : inv.supplier_id;
+    return `<option value="${inv.id}"
+      data-party-id="${partyId}"
+      data-party="${partyName}"
+      data-remaining="${remaining.toFixed(2)}"
+      data-invoice-number="${inv.invoice_number}">
+      ${inv.invoice_number} — ${partyName} (المتبقي: ${remaining.toLocaleString('ar-EG', {minimumFractionDigits:2, maximumFractionDigits:2})})
+    </option>`;
+  }).join('');
 
   openModal(isReceipt ? 'تسجيل مقبوضات' : 'تسجيل مدفوعات', `
     <div class="form-grid">
+      <div class="form-group form-full">
+        <label>ربط بفاتورة موجودة (اختياري)</label>
+        <select id="np-invoice" onchange="onPaymentInvoiceChange('${type}')">
+          <option value="">— بدون ربط بفاتورة —</option>
+          ${invoiceOptions}
+        </select>
+      </div>
       <div class="form-group">
         <label>${isReceipt ? 'العميل' : 'المورد'} *</label>
         <select id="np-party">
@@ -127,20 +159,48 @@ function openNewPaymentModal(type) {
   `);
 }
 
+function onPaymentInvoiceChange(type) {
+  const sel = document.getElementById('np-invoice');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) return;
+
+  const partyId      = opt.dataset.partyId;
+  const remaining    = parseFloat(opt.dataset.remaining);
+  const invoiceNum   = opt.dataset.invoiceNumber;
+
+  // Auto-select matching party
+  const partyEl = document.getElementById('np-party');
+  for (let i = 0; i < partyEl.options.length; i++) {
+    if (partyEl.options[i].value === partyId) { partyEl.selectedIndex = i; break; }
+  }
+
+  // Auto-fill amount (remaining balance) and reference
+  document.getElementById('np-amount').value = remaining.toFixed(2);
+  document.getElementById('np-ref').value    = invoiceNum;
+  document.getElementById('np-notes').value  = `سداد ${invoiceNum}`;
+}
+
 async function savePayment(type, partyType) {
   const partyEl = document.getElementById('np-party');
   if (!partyEl.value) { toast('الرجاء اختيار الطرف', 'error'); return; }
   const amount = parseFloat(document.getElementById('np-amount').value);
   if (!amount || amount <= 0) { toast('الرجاء إدخال مبلغ صحيح', 'error'); return; }
+
+  const invoiceEl   = document.getElementById('np-invoice');
+  const invoiceId   = invoiceEl?.value ? parseInt(invoiceEl.value) : null;
+  const invoiceType = type === 'receipt' ? 'sale' : 'purchase';
+
   await api.createPayment({
     type, party_type: partyType,
-    party_id:  parseInt(partyEl.value),
-    party:     partyEl.options[partyEl.selectedIndex].dataset.name,
+    party_id:     parseInt(partyEl.value),
+    party:        partyEl.options[partyEl.selectedIndex].dataset.name,
     amount,
-    date:      document.getElementById('np-date').value,
-    method:    document.getElementById('np-method').value,
-    reference: document.getElementById('np-ref').value,
-    notes:     document.getElementById('np-notes').value,
+    date:         document.getElementById('np-date').value,
+    method:       document.getElementById('np-method').value,
+    reference:    document.getElementById('np-ref').value,
+    notes:        document.getElementById('np-notes').value,
+    invoice_id:   invoiceId,
+    invoice_type: invoiceType,
   });
   closeModal();
   toast('تم تسجيل المعاملة بنجاح', 'success');

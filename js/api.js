@@ -3,10 +3,20 @@
 // ============================================
 
 // ===== SEED DATA =====
+// Default employee accounts added during migration
+const DEFAULT_EMPLOYEES = [
+  { email: 'accountant@marble.com',  password: 'acc123',     name: 'أحمد المحاسب',         role: 'محاسب',           phone: '01012345679', department: 'المحاسبة',    active: true },
+  { email: 'sales@marble.com',       password: 'sales123',   name: 'محمد موظف مبيعات',     role: 'موظف مبيعات',    phone: '01112345678', department: 'المبيعات',    active: true },
+  { email: 'purchase@marble.com',    password: 'pur123',     name: 'علي موظف مشتريات',     role: 'موظف مشتريات',  phone: '01512345679', department: 'المشتريات',   active: true },
+  { email: 'production@marble.com',  password: 'prod123',    name: 'خالد موظف تصنيع',      role: 'موظف تصنيع',    phone: '01234567891', department: 'التصنيع',     active: true },
+  { email: 'prodmgr@marble.com',     password: 'prodmgr123', name: 'سامي مدير التصنيع',    role: 'مدير تصنيع',    phone: '01234567892', department: 'التصنيع',     active: true },
+];
+
 const SEED_DATA = {
   users: [
-    { id: 1, email: 'admin@marble.com', password: 'admin123', name: 'مدير النظام', role: 'مدير' }
+    { id: 1, email: 'admin@marble.com', password: 'admin123', name: 'مدير النظام', role: 'مدير', phone: '', department: 'الإدارة العامة', active: true }
   ],
+  activity_log: [],
   settings: {
     company_name: 'شركة الرخام والجرانيت',
     currency: 'EGP',
@@ -146,6 +156,25 @@ const DB = {
       }
       this.set('seeded', true);
     }
+    // Migration: ensure activity_log exists
+    if (!this.get('activity_log')) this.set('activity_log', []);
+    // Migration: add missing fields to existing users
+    const users = this.getAll('users');
+    let usersMigrated = false;
+    users.forEach(u => {
+      if (!('active'     in u)) { u.active     = true; usersMigrated = true; }
+      if (!('phone'      in u)) { u.phone      = '';   usersMigrated = true; }
+      if (!('department' in u)) { u.department = '';   usersMigrated = true; }
+    });
+    if (usersMigrated) this.set('users', users);
+    // Migration: add default employee accounts if missing
+    DEFAULT_EMPLOYEES.forEach(emp => {
+      const existing = this.getAll('users').find(u => u.email === emp.email);
+      if (!existing) {
+        const id = DB.nextId('users');
+        DB.save('users', { ...emp, id });
+      }
+    });
   },
   getAll(key) { return this.get(key) || []; },
   findById(key, id) { return this.getAll(key).find(i => i.id === parseInt(id)); },
@@ -178,6 +207,7 @@ const api = {
   async login(email, password) {
     const user = DB.getAll('users').find(u => u.email === email && u.password === password);
     if (!user) throw new Error('بريد إلكتروني أو كلمة مرور غير صحيحة');
+    if (user.active === false) throw new Error('تم إيقاف هذا الحساب. تواصل مع المدير.');
     return { token: 'mock_token_' + Date.now(), user: { id: user.id, name: user.name, role: user.role, email: user.email } };
   },
   async me() { return JSON.parse(localStorage.getItem('marble_user') || '{}'); },
@@ -257,12 +287,14 @@ const api = {
   async saleDetail(id) { return DB.findById('sales', id); },
   async createSale(d) {
     const id  = DB.nextId('sales');
-    const num = String(id).padStart(3, '0');
-    return DB.save('sales', { ...d, id, invoice_number: `INV-${new Date().getFullYear()}-${num}`, paid_amount: d.paid_amount || 0, status: d.status || 'draft' });
+    const num = `INV-${new Date().getFullYear()}-${String(id).padStart(3, '0')}`;
+    const sale = DB.save('sales', { ...d, id, invoice_number: num, paid_amount: d.paid_amount || 0, status: d.status || 'draft' });
+    this.logActivity('create', 'sale', id, `فاتورة مبيعات: ${num} - ${d.customer}`);
+    return sale;
   },
   async cancelSale(id) {
     const s = DB.findById('sales', id);
-    if (s) { s.status = 'cancelled'; DB.save('sales', s); }
+    if (s) { s.status = 'cancelled'; DB.save('sales', s); this.logActivity('update', 'sale', parseInt(id), `إلغاء فاتورة: ${s.invoice_number}`); }
     return s;
   },
   async aging() {
@@ -294,8 +326,10 @@ const api = {
   },
   async createPurchase(d) {
     const id  = DB.nextId('purchases');
-    const num = String(id).padStart(3, '0');
-    return DB.save('purchases', { ...d, id, invoice_number: `PUR-${new Date().getFullYear()}-${num}`, paid_amount: d.paid_amount || 0, status: d.status || 'draft' });
+    const num = `PUR-${new Date().getFullYear()}-${String(id).padStart(3, '0')}`;
+    const pur = DB.save('purchases', { ...d, id, invoice_number: num, paid_amount: d.paid_amount || 0, status: d.status || 'draft' });
+    this.logActivity('create', 'purchase', id, `فاتورة شراء: ${num} - ${d.supplier}`);
+    return pur;
   },
 
   // ===== SUPPLIERS =====
@@ -313,7 +347,23 @@ const api = {
     if (params.search) { const q = params.search.toLowerCase(); items = items.filter(i => i.party.toLowerCase().includes(q)); }
     return { data: items.sort((a, b) => new Date(b.date) - new Date(a.date)) };
   },
-  async createPayment(d) { return DB.save('payments', { ...d, id: DB.nextId('payments') }); },
+  async createPayment(d) {
+    // Validate and update linked invoice before saving payment
+    if (d.invoice_id && d.invoice_type === 'sale') {
+      const inv = DB.findById('sales', d.invoice_id);
+      if (!inv) throw new Error('الفاتورة المرتبطة غير موجودة');
+    }
+    if (d.invoice_id && d.invoice_type === 'purchase') {
+      const inv = DB.findById('purchases', d.invoice_id);
+      if (!inv) throw new Error('الفاتورة المرتبطة غير موجودة');
+    }
+    const payment = DB.save('payments', { ...d, id: DB.nextId('payments') });
+    if (d.invoice_id && d.invoice_type === 'sale')     this.updateSalePaid(d.invoice_id, d.amount);
+    if (d.invoice_id && d.invoice_type === 'purchase') this.updatePurchasePaid(d.invoice_id, d.amount);
+    this.logActivity('create', 'payment', payment.id,
+      `${d.type === 'receipt' ? 'مقبوض' : 'مدفوع'}: ${d.amount} - ${d.party}${d.invoice_id ? ' (مرتبط بفاتورة)' : ''}`);
+    return payment;
+  },
 
   // ===== EXPENSES =====
   async expenses(params = {}) {
@@ -321,7 +371,11 @@ const api = {
     if (params.search) { const q = params.search.toLowerCase(); items = items.filter(i => i.description.toLowerCase().includes(q) || i.category.toLowerCase().includes(q)); }
     return { data: items.sort((a, b) => new Date(b.date) - new Date(a.date)) };
   },
-  async createExpense(d) { return DB.save('expenses', { ...d, id: DB.nextId('expenses') }); },
+  async createExpense(d) {
+    const exp = DB.save('expenses', { ...d, id: DB.nextId('expenses') });
+    this.logActivity('create', 'expense', exp.id, `مصروف: ${d.category} - ${d.description} (${d.amount})`);
+    return exp;
+  },
 
   // ===== PRODUCTS =====
   async products(params = {}) {
@@ -363,8 +417,10 @@ const api = {
   async cuttingDetail(id) { return DB.findById('cutting', id); },
   async createCutting(d) {
     const id  = DB.nextId('cutting');
-    const num = String(id).padStart(3, '0');
-    return DB.save('cutting', { ...d, id, batch_number: `CUT-${new Date().getFullYear()}-${num}`, status: 'in_progress' });
+    const num = `CUT-${new Date().getFullYear()}-${String(id).padStart(3, '0')}`;
+    const cut = DB.save('cutting', { ...d, id, batch_number: num, status: 'in_progress' });
+    this.logActivity('create', 'cutting', id, `دفعة تصنيع: ${num} - ${d.block_code || ''}`);
+    return cut;
   },
 
   // ===== PROJECTS =====
@@ -421,5 +477,81 @@ const api = {
     const n = DB.findById('notifications', id);
     if (n) { n.is_read = true; DB.save('notifications', n); }
     return n;
+  },
+
+  // ===== USERS / EMPLOYEES =====
+  async users(params = {}) {
+    let items = DB.getAll('users').map(({ password, ...u }) => u);
+    if (params.search) {
+      const q = params.search.toLowerCase();
+      items = items.filter(i => i.name.toLowerCase().includes(q) || i.email.toLowerCase().includes(q));
+    }
+    return items;
+  },
+  async createUser(d) {
+    const existing = DB.getAll('users').find(u => u.email === d.email);
+    if (existing) throw new Error('البريد الإلكتروني مستخدم بالفعل');
+    const newUser = DB.save('users', { ...d, id: DB.nextId('users'), active: true });
+    this.logActivity('create', 'employee', newUser.id, `إضافة موظف: ${d.name} (${d.role})`);
+    return newUser;
+  },
+  async updateUser(id, d) {
+    const existing = DB.findById('users', id);
+    if (!existing) throw new Error('المستخدم غير موجود');
+    if (d.email && d.email !== existing.email) {
+      const dup = DB.getAll('users').find(u => u.email === d.email && u.id !== parseInt(id));
+      if (dup) throw new Error('البريد الإلكتروني مستخدم بالفعل');
+    }
+    const updated = { ...existing, ...d, id: parseInt(id) };
+    if (!d.password) updated.password = existing.password;
+    DB.save('users', updated);
+    this.logActivity('update', 'employee', parseInt(id), `تعديل بيانات موظف: ${updated.name}`);
+    return updated;
+  },
+  async deleteUser(id) {
+    if (parseInt(id) === 1) throw new Error('لا يمكن حذف حساب المدير الرئيسي');
+    DB.remove('users', id);
+  },
+
+  // ===== ACTIVITY LOG =====
+  logActivity(action, entityType, entityId, description) {
+    const user = JSON.parse(localStorage.getItem('marble_user') || '{}');
+    if (!user.id) return;
+    DB.save('activity_log', {
+      id: DB.nextId('activity_log'),
+      user_id:     user.id,
+      user_name:   user.name || 'مجهول',
+      action,
+      entity_type: entityType,
+      entity_id:   entityId,
+      description,
+      created_at:  new Date().toISOString(),
+    });
+  },
+  async activityLog(params = {}) {
+    let items = DB.getAll('activity_log');
+    if (params.user_id)     items = items.filter(i => i.user_id     === parseInt(params.user_id));
+    if (params.entity_type) items = items.filter(i => i.entity_type === params.entity_type);
+    return items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 500);
+  },
+
+  // ===== INVOICE-PAYMENT HELPERS =====
+  updateSalePaid(id, addAmount) {
+    const s = DB.findById('sales', id);
+    if (!s) return;
+    s.paid_amount = Math.min((s.paid_amount || 0) + addAmount, s.total_amount);
+    if (s.paid_amount >= s.total_amount)  s.status = 'paid';
+    else if (s.paid_amount > 0)           s.status = 'partial';
+    DB.save('sales', s);
+    return s;
+  },
+  updatePurchasePaid(id, addAmount) {
+    const p = DB.findById('purchases', id);
+    if (!p) return;
+    p.paid_amount = Math.min((p.paid_amount || 0) + addAmount, p.total_amount);
+    if (p.paid_amount >= p.total_amount)  p.status = 'paid';
+    else if (p.paid_amount > 0)           p.status = 'partial';
+    DB.save('purchases', p);
+    return p;
   },
 };

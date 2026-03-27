@@ -4,6 +4,17 @@
 
 let currentUser = null;
 
+// ===== ROLE-BASED ACCESS =====
+const ROLE_PAGES = {
+  'مدير':           null, // null = all pages visible
+  'محاسب':          ['dashboard', 'journal', 'accounts', 'trial-balance', 'payments', 'expenses', 'report-pl', 'report-bs', 'report-waste', 'report-inventory', 'settings', 'notifications'],
+  'موظف مبيعات':   ['dashboard', 'sales', 'customers', 'aging', 'notifications'],
+  'مدير مبيعات':   ['dashboard', 'sales', 'customers', 'aging', 'payments', 'report-pl', 'notifications'],
+  'موظف مشتريات': ['dashboard', 'purchases', 'suppliers', 'payments', 'notifications'],
+  'موظف تصنيع':   ['dashboard', 'blocks', 'cutting', 'slabs', 'products', 'notifications'],
+  'مدير تصنيع':   ['dashboard', 'blocks', 'cutting', 'slabs', 'products', 'report-waste', 'report-inventory', 'notifications'],
+};
+
 // ===== AUTH =====
 async function doLogin() {
   const email    = document.getElementById('login-email').value.trim();
@@ -16,6 +27,7 @@ async function doLogin() {
     api.setToken(data.token);
     currentUser = data.user;
     localStorage.setItem('marble_user', JSON.stringify(data.user));
+    api.logActivity('login', 'auth', data.user.id, `تسجيل دخول: ${data.user.name} (${data.user.role})`);
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
     initApp();
@@ -45,6 +57,9 @@ async function initApp() {
     if (s.company_name) document.getElementById('company-name-sidebar').textContent = s.company_name;
   } catch(e) {}
 
+  // Apply role-based sidebar
+  filterSidebarByRole();
+
   // Load notifications
   loadNotifications();
   setInterval(loadNotifications, 60000);
@@ -61,7 +76,35 @@ async function loadNotifications() {
   } catch(e) {}
 }
 
-// ===== PAGE ROUTING =====
+// ===== SIDEBAR ROLE FILTER =====
+function filterSidebarByRole() {
+  const role    = currentUser?.role || 'مدير';
+  const allowed = ROLE_PAGES[role]; // null = admin sees all
+
+  document.querySelectorAll('.nav-item[data-page]').forEach(item => {
+    if (allowed === null) {
+      item.style.display = '';
+    } else {
+      item.style.display = allowed.includes(item.dataset.page) ? '' : 'none';
+    }
+  });
+
+  // Hide section labels whose items are all hidden
+  document.querySelectorAll('.nav-section-label').forEach(label => {
+    let next = label.nextElementSibling;
+    let anyVisible = false;
+    while (next && !next.classList.contains('nav-section-label')) {
+      if (next.classList.contains('nav-item') && next.style.display !== 'none') {
+        anyVisible = true;
+        break;
+      }
+      next = next.nextElementSibling;
+    }
+    label.style.display = anyVisible ? '' : 'none';
+  });
+}
+
+
 const pageTitles = {
   'dashboard':        'لوحة التحكم',
   'journal':          'القيود المحاسبية',
@@ -77,16 +120,24 @@ const pageTitles = {
   'cutting':          'عمليات القطع',
   'slabs':            'الألواح (Slabs)',
   'products':         'المنتجات',
-  'projects':         'المشاريع',
   'expenses':         'المصروفات',
   'report-pl':        'تقرير الأرباح والخسائر',
   'report-bs':        'الميزانية العمومية',
   'report-waste':     'تقرير الهالك',
   'report-inventory': 'تقرير المخزون',
   'settings':         'الإعدادات',
+  'employees':        'إدارة الموظفين',
+  'activity-log':     'سجل الأنشطة',
 };
 
 function showPage(pageName) {
+  // Access control: redirect to dashboard if user lacks permission
+  const role    = currentUser?.role || 'مدير';
+  const allowed = ROLE_PAGES[role];
+  if (allowed !== null && pageName !== 'dashboard' && !allowed.includes(pageName)) {
+    pageName = 'dashboard';
+  }
+
   // Update active nav
   document.querySelectorAll('.nav-item').forEach(el => {
     el.classList.toggle('active', el.dataset.page === pageName);
@@ -114,7 +165,6 @@ function showPage(pageName) {
     'cutting':          renderCutting,
     'slabs':            renderSlabs,
     'products':         renderProducts,
-    'projects':         renderProjects,
     'expenses':         renderExpenses,
     'report-pl':        renderReportPL,
     'report-bs':        renderReportBS,
@@ -122,6 +172,8 @@ function showPage(pageName) {
     'report-inventory': renderReportInventory,
     'settings':         renderSettings,
     'notifications':    renderNotifications,
+    'employees':        renderEmployees,
+    'activity-log':     renderActivityLog,
   };
 
   if (renders[pageName]) renders[pageName]();
