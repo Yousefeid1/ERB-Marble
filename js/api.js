@@ -5,16 +5,20 @@
 // ===== SEED DATA =====
 // Default employee accounts added during migration
 const DEFAULT_EMPLOYEES = [
-  { email: 'accountant@marble.com',  password: 'acc123',     name: 'أحمد المحاسب',         role: 'محاسب',           phone: '01012345679', department: 'المحاسبة',    active: true },
-  { email: 'sales@marble.com',       password: 'sales123',   name: 'محمد موظف مبيعات',     role: 'موظف مبيعات',    phone: '01112345678', department: 'المبيعات',    active: true },
-  { email: 'purchase@marble.com',    password: 'pur123',     name: 'علي موظف مشتريات',     role: 'موظف مشتريات',  phone: '01512345679', department: 'المشتريات',   active: true },
-  { email: 'production@marble.com',  password: 'prod123',    name: 'خالد موظف تصنيع',      role: 'موظف تصنيع',    phone: '01234567891', department: 'التصنيع',     active: true },
-  { email: 'prodmgr@marble.com',     password: 'prodmgr123', name: 'سامي مدير التصنيع',    role: 'مدير تصنيع',    phone: '01234567892', department: 'التصنيع',     active: true },
+  { email: 'accountant@marble.com',  password: 'acc123',     name: 'أحمد المحاسب',         role: 'محاسب',              phone: '01012345679', department: 'المحاسبة',    active: true, work_status: 'active', national_id: '28901011234567', salary: 8000  },
+  { email: 'sales@marble.com',       password: 'sales123',   name: 'محمد موظف مبيعات',     role: 'موظف مبيعات',       phone: '01112345678', department: 'المبيعات',    active: true, work_status: 'active', national_id: '29001021234567', salary: 6000  },
+  { email: 'purchase@marble.com',    password: 'pur123',     name: 'علي موظف مشتريات',     role: 'موظف مشتريات',     phone: '01512345679', department: 'المشتريات',   active: true, work_status: 'active', national_id: '29101031234567', salary: 6000  },
+  { email: 'production@marble.com',  password: 'prod123',    name: 'خالد موظف تصنيع',      role: 'موظف تصنيع',       phone: '01234567891', department: 'التصنيع',     active: true, work_status: 'active', national_id: '29201041234567', salary: 5500  },
+  { email: 'prodmgr@marble.com',     password: 'prodmgr123', name: 'سامي مدير التصنيع',    role: 'مدير تصنيع',       phone: '01234567892', department: 'التصنيع',     active: true, work_status: 'active', national_id: '28801051234567', salary: 10000 },
+  { email: 'supervisor@marble.com',  password: 'sup123',     name: 'رامي مشرف التصنيع',    role: 'مشرف تصنيع',       phone: '01234567893', department: 'التصنيع',     active: true, work_status: 'active', national_id: '29301061234567', salary: 7000  },
+  { email: 'logistics@marble.com',   password: 'log123',     name: 'طارق اللوجستيك',       role: 'موظف لوجستيك',     phone: '01234567894', department: 'اللوجستيك',   active: true, work_status: 'active', national_id: '29401071234567', salary: 6500  },
+  { email: 'deptmgr@marble.com',     password: 'dept123',    name: 'نادية مدير القسم',      role: 'مدير قسم',          phone: '01234567895', department: 'المبيعات',    active: true, work_status: 'active', national_id: '28701081234567', salary: 9000  },
+  { email: 'employee@marble.com',    password: 'emp123',     name: 'سارة موظفة',            role: 'موظف عادي',         phone: '01234567896', department: 'الإدارة',     active: true, work_status: 'active', national_id: '29501091234567', salary: 4500  },
 ];
 
 const SEED_DATA = {
   users: [
-    { id: 1, email: 'admin@marble.com', password: 'admin123', name: 'مدير النظام', role: 'مدير', phone: '', department: 'الإدارة العامة', active: true }
+    { id: 1, email: 'admin@marble.com', password: 'admin123', name: 'مدير النظام', role: 'مدير عام', phone: '', department: 'الإدارة العامة', active: true, work_status: 'active', national_id: '', salary: 0 }
   ],
   activity_log: [],
   settings: {
@@ -136,6 +140,16 @@ const SEED_DATA = {
     { id: 3, title: 'فاتورة متأخرة', message: 'فاتورة INV-2024-002 تجاوزت تاريخ الاستحقاق',               type: 'danger',  is_read: false, created_at: new Date(Date.now() - 86400000).toISOString() },
     { id: 4, title: 'دفعة جديدة',    message: 'تم استلام 50,000 ج.م من شركة الإعمار المصرية',              type: 'success', is_read: true,  created_at: new Date(Date.now() - 172800000).toISOString() },
   ],
+  warehouses: [
+    { id: 1, name: 'المستودع الرئيسي',    location: 'القاهرة - المنطقة الصناعية', manager: 'طارق اللوجستيك', capacity: 5000, status: 'active', notes: 'المستودع الرئيسي للرخام والجرانيت' },
+    { id: 2, name: 'مستودع الإسكندرية',   location: 'الإسكندرية - المنطقة الصناعية', manager: 'طارق اللوجستيك', capacity: 2000, status: 'active', notes: 'مستودع الشحن والتوزيع للساحل الشمالي' },
+    { id: 3, name: 'مستودع مواد خام',     location: 'القاهرة - مدينة بدر', manager: 'خالد موظف تصنيع', capacity: 8000, status: 'active', notes: 'تخزين البلوكات الخام قبل التصنيع' },
+  ],
+  shipments: [
+    { id: 1, shipment_number: 'SHP-2024-001', invoice_id: 1, invoice_number: 'INV-2024-001', customer: 'مقاولون مصر للإنشاء', origin: 'المستودع الرئيسي', destination: 'القاهرة - مشروع فيلا الساحل', driver: 'عمرو السائق', vehicle: 'نقل ثقيل - ق ج ن 123', weight_tons: 5.5, shipment_date: '2024-02-12', delivery_date: '2024-02-13', status: 'delivered', notes: 'تم التسليم بسلامة' },
+    { id: 2, shipment_number: 'SHP-2024-002', invoice_id: 2, invoice_number: 'INV-2024-002', customer: 'شركة الإعمار المصرية', origin: 'المستودع الرئيسي', destination: 'الجيزة - برج الإعمار', driver: 'حسن السائق', vehicle: 'نقل ثقيل - ق م ص 456', weight_tons: 12.0, shipment_date: '2024-02-25', delivery_date: null, status: 'in_transit', notes: 'في الطريق' },
+    { id: 3, shipment_number: 'SHP-2024-003', invoice_id: 3, invoice_number: 'INV-2024-003', customer: 'مشاريع النيل العقارية', origin: 'المستودع الرئيسي', destination: 'الإسكندرية - كمباوند النيل', driver: 'عمرو السائق', vehicle: 'نقل ثقيل - ق ج ن 123', weight_tons: 3.6, shipment_date: '2024-03-10', delivery_date: null, status: 'pending', notes: 'في انتظار التحميل' },
+  ],
 };
 
 // ===== MOCK DB =====
@@ -156,15 +170,23 @@ const DB = {
       }
       this.set('seeded', true);
     }
-    // Migration: ensure activity_log exists
+    // Migration: add activity_log if missing
     if (!this.get('activity_log')) this.set('activity_log', []);
+    // Migration: add warehouses/shipments if missing
+    if (!this.get('warehouses')) this.set('warehouses', SEED_DATA.warehouses);
+    if (!this.get('shipments'))  this.set('shipments',  SEED_DATA.shipments);
     // Migration: add missing fields to existing users
     const users = this.getAll('users');
     let usersMigrated = false;
     users.forEach(u => {
-      if (!('active'     in u)) { u.active     = true; usersMigrated = true; }
-      if (!('phone'      in u)) { u.phone      = '';   usersMigrated = true; }
-      if (!('department' in u)) { u.department = '';   usersMigrated = true; }
+      if (!('active'      in u)) { u.active      = true;     usersMigrated = true; }
+      if (!('phone'       in u)) { u.phone       = '';       usersMigrated = true; }
+      if (!('department'  in u)) { u.department  = '';       usersMigrated = true; }
+      if (!('work_status' in u)) { u.work_status = u.active !== false ? 'active' : 'terminated'; usersMigrated = true; }
+      if (!('national_id' in u)) { u.national_id = '';       usersMigrated = true; }
+      if (!('salary'      in u)) { u.salary      = 0;        usersMigrated = true; }
+      // Migrate role 'مدير' to 'مدير عام'
+      if (u.role === 'مدير') { u.role = 'مدير عام'; usersMigrated = true; }
     });
     if (usersMigrated) this.set('users', users);
     // Migration: add default employee accounts if missing
@@ -208,6 +230,8 @@ const api = {
     const user = DB.getAll('users').find(u => u.email === email && u.password === password);
     if (!user) throw new Error('بريد إلكتروني أو كلمة مرور غير صحيحة');
     if (user.active === false) throw new Error('تم إيقاف هذا الحساب. تواصل مع المدير.');
+    if (user.work_status === 'terminated') throw new Error('تم فصل هذا الموظف. تواصل مع المدير.');
+    if (user.work_status === 'resigned')   throw new Error('لقد قدّم هذا الموظف استقالته. تواصل مع المدير.');
     return { token: 'mock_token_' + Date.now(), user: { id: user.id, name: user.name, role: user.role, email: user.email } };
   },
   async me() { return JSON.parse(localStorage.getItem('marble_user') || '{}'); },
@@ -295,6 +319,20 @@ const api = {
   async cancelSale(id) {
     const s = DB.findById('sales', id);
     if (s) { s.status = 'cancelled'; DB.save('sales', s); this.logActivity('update', 'sale', parseInt(id), `إلغاء فاتورة: ${s.invoice_number}`); }
+    return s;
+  },
+  async updateSaleStatus(id, newStatus) {
+    const s = DB.findById('sales', id);
+    if (!s) throw new Error('الفاتورة غير موجودة');
+    const allowedStatuses = ['draft', 'sent', 'partial', 'paid', 'cancelled', 'rejected'];
+    if (!allowedStatuses.includes(newStatus)) throw new Error('حالة غير صالحة');
+    const oldStatus = s.status;
+    s.status = newStatus;
+    DB.save('sales', s);
+    this.logActivity('update', 'sale', parseInt(id), `تغيير حالة فاتورة ${s.invoice_number}: ${oldStatus} ← ${newStatus}`);
+    // Add notification for status change
+    const notifMsg = `تم تغيير حالة الفاتورة ${s.invoice_number} (${s.customer}) إلى: ${{ draft:'مسودة', sent:'مرسلة', partial:'جزئي مدفوع', paid:'مدفوعة', cancelled:'ملغاة', rejected:'مرفوضة' }[newStatus] || newStatus}`;
+    DB.save('notifications', { id: DB.nextId('notifications'), title: 'تغيير حالة فاتورة', message: notifMsg, type: newStatus === 'paid' ? 'success' : newStatus === 'rejected' || newStatus === 'cancelled' ? 'danger' : 'warning', is_read: false, created_at: new Date().toISOString() });
     return s;
   },
   async aging() {
@@ -470,6 +508,49 @@ const api = {
   // ===== SETTINGS =====
   async settings()      { return DB.get('settings') || SEED_DATA.settings; },
   async saveSettings(d) { DB.set('settings', d); return d; },
+
+  // ===== WAREHOUSES =====
+  async warehouses(params = {}) {
+    let items = DB.getAll('warehouses');
+    if (params.search) { const q = params.search.toLowerCase(); items = items.filter(i => i.name.toLowerCase().includes(q) || i.location.toLowerCase().includes(q)); }
+    return items;
+  },
+  async createWarehouse(d) {
+    const w = DB.save('warehouses', { ...d, id: DB.nextId('warehouses'), status: 'active' });
+    this.logActivity('create', 'logistics', w.id, `إضافة مستودع: ${d.name}`);
+    return w;
+  },
+  async updateWarehouse(id, d) {
+    const existing = DB.findById('warehouses', id);
+    if (!existing) throw new Error('المستودع غير موجود');
+    const updated = DB.save('warehouses', { ...existing, ...d, id: parseInt(id) });
+    this.logActivity('update', 'logistics', parseInt(id), `تعديل مستودع: ${updated.name}`);
+    return updated;
+  },
+
+  // ===== SHIPMENTS =====
+  async shipments(params = {}) {
+    let items = DB.getAll('shipments');
+    if (params.status)   items = items.filter(i => i.status === params.status);
+    if (params.search)   { const q = params.search.toLowerCase(); items = items.filter(i => i.shipment_number.toLowerCase().includes(q) || i.customer.toLowerCase().includes(q) || (i.invoice_number || '').toLowerCase().includes(q)); }
+    return { data: items.sort((a, b) => new Date(b.shipment_date) - new Date(a.shipment_date)) };
+  },
+  async createShipment(d) {
+    const id  = DB.nextId('shipments');
+    const num = `SHP-${new Date().getFullYear()}-${String(id).padStart(3, '0')}`;
+    const shp = DB.save('shipments', { ...d, id, shipment_number: num, status: d.status || 'pending' });
+    this.logActivity('create', 'logistics', id, `شحنة جديدة: ${num} - ${d.customer}`);
+    return shp;
+  },
+  async updateShipmentStatus(id, newStatus) {
+    const s = DB.findById('shipments', id);
+    if (!s) throw new Error('الشحنة غير موجودة');
+    s.status = newStatus;
+    if (newStatus === 'delivered') s.delivery_date = new Date().toISOString().split('T')[0];
+    DB.save('shipments', s);
+    this.logActivity('update', 'logistics', parseInt(id), `تحديث حالة شحنة ${s.shipment_number}: ${newStatus}`);
+    return s;
+  },
 
   // ===== NOTIFICATIONS =====
   async notifications() { return DB.getAll('notifications'); },

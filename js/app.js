@@ -6,13 +6,18 @@ let currentUser = null;
 
 // ===== ROLE-BASED ACCESS =====
 const ROLE_PAGES = {
-  'مدير':           null, // null = all pages visible
-  'محاسب':          ['dashboard', 'journal', 'accounts', 'trial-balance', 'payments', 'expenses', 'report-pl', 'report-bs', 'report-waste', 'report-inventory', 'settings', 'notifications'],
-  'موظف مبيعات':   ['dashboard', 'sales', 'customers', 'aging', 'notifications'],
-  'مدير مبيعات':   ['dashboard', 'sales', 'customers', 'aging', 'payments', 'report-pl', 'notifications'],
-  'موظف مشتريات': ['dashboard', 'purchases', 'suppliers', 'payments', 'notifications'],
-  'موظف تصنيع':   ['dashboard', 'blocks', 'cutting', 'slabs', 'products', 'notifications'],
-  'مدير تصنيع':   ['dashboard', 'blocks', 'cutting', 'slabs', 'products', 'report-waste', 'report-inventory', 'notifications'],
+  'مدير عام':        null, // null = all pages visible
+  'مدير':            null,
+  'محاسب':           ['dashboard', 'journal', 'accounts', 'trial-balance', 'payments', 'expenses', 'report-pl', 'report-bs', 'report-waste', 'report-inventory', 'settings', 'notifications'],
+  'موظف مبيعات':    ['dashboard', 'sales', 'customers', 'aging', 'notifications'],
+  'مدير مبيعات':    ['dashboard', 'sales', 'customers', 'aging', 'payments', 'report-pl', 'notifications'],
+  'موظف مشتريات':  ['dashboard', 'purchases', 'suppliers', 'payments', 'notifications'],
+  'موظف تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'products', 'notifications'],
+  'مدير تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'products', 'report-waste', 'report-inventory', 'notifications'],
+  'مشرف تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'products', 'notifications'],
+  'موظف لوجستيك':  ['dashboard', 'warehouses', 'shipments', 'notifications'],
+  'مدير قسم':       ['dashboard', 'employees', 'activity-log', 'sales', 'customers', 'report-pl', 'notifications'],
+  'موظف عادي':      ['dashboard', 'notifications'],
 };
 
 // ===== AUTH =====
@@ -128,6 +133,8 @@ const pageTitles = {
   'settings':         'الإعدادات',
   'employees':        'إدارة الموظفين',
   'activity-log':     'سجل الأنشطة',
+  'warehouses':       'إدارة المستودعات',
+  'shipments':        'الشحن والتوصيل',
 };
 
 function showPage(pageName) {
@@ -174,6 +181,8 @@ function showPage(pageName) {
     'notifications':    renderNotifications,
     'employees':        renderEmployees,
     'activity-log':     renderActivityLog,
+    'warehouses':       renderWarehouses,
+    'shipments':        renderShipments,
   };
 
   if (renders[pageName]) renders[pageName]();
@@ -220,18 +229,25 @@ function formatDate(d) {
 
 function statusBadge(status) {
   const map = {
-    'draft':     ['badge-warning', 'مسودة'],
-    'sent':      ['badge-info',    'مرسلة'],
-    'partial':   ['badge-warning', 'جزئي'],
-    'paid':      ['badge-success', 'مسددة'],
-    'cancelled': ['badge-danger',  'ملغاة'],
-    'active':    ['badge-success', 'نشط'],
-    'completed': ['badge-info',    'مكتمل'],
-    'in_stock':  ['badge-success', 'في المخزن'],
-    'sold':      ['badge-info',    'مباعة'],
-    'waste':     ['badge-danger',  'هالك'],
-    'processed': ['badge-gold',    'مُصنَّع'],
-    'in_cutting':['badge-warning', 'في القطع'],
+    'draft':      ['badge-warning', 'مسودة'],
+    'sent':       ['badge-info',    'مرسلة'],
+    'partial':    ['badge-warning', 'جزئي'],
+    'paid':       ['badge-success', 'مسددة'],
+    'cancelled':  ['badge-danger',  'ملغاة'],
+    'rejected':   ['badge-danger',  'مرفوضة'],
+    'active':     ['badge-success', 'نشط'],
+    'completed':  ['badge-info',    'مكتمل'],
+    'in_stock':   ['badge-success', 'في المخزن'],
+    'sold':       ['badge-info',    'مباعة'],
+    'waste':      ['badge-danger',  'هالك'],
+    'processed':  ['badge-gold',    'مُصنَّع'],
+    'in_cutting': ['badge-warning', 'في القطع'],
+    'pending':    ['badge-warning', 'قيد التنفيذ'],
+    'in_transit': ['badge-info',    'في الطريق'],
+    'delivered':  ['badge-success', 'تم التسليم'],
+    'on_leave':   ['badge-warning', 'إجازة'],
+    'resigned':   ['badge-danger',  'مستقيل'],
+    'terminated': ['badge-danger',  'تم الفصل'],
   };
   const [cls, label] = map[status] || ['badge-info', status];
   return `<span class="badge ${cls}">${label}</span>`;

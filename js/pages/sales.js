@@ -27,6 +27,7 @@ async function renderSales() {
           <option value="partial">جزئي</option>
           <option value="paid">مسددة</option>
           <option value="cancelled">ملغاة</option>
+          <option value="rejected">مرفوضة</option>
         </select>
       </div>
 
@@ -59,21 +60,36 @@ async function renderSales() {
   }
 }
 
+function isInvoiceFinal(status) {
+  return status === 'paid' || status === 'cancelled' || status === 'rejected';
+}
+
+function getDueDateClass(sale) {
+  if (!sale.due_date || isInvoiceFinal(sale.status)) return '';
+  return new Date(sale.due_date) < new Date() ? 'text-danger' : '';
+}
+
 function renderSalesRows(sales) {
   if (!sales.length) return `<tr><td colspan="9"><div class="empty-state" style="padding:40px"><div class="empty-icon">🧾</div><h3>لا توجد فواتير</h3></div></td></tr>`;
+  const canChangeStatus = canUserChangeInvoiceStatus();
   return sales.map(s => `
     <tr>
       <td class="number"><strong>${s.invoice_number}</strong></td>
       <td>${s.customer}</td>
       <td>${formatDate(s.invoice_date)}</td>
-      <td>${formatDate(s.due_date)}</td>
+      <td class="${getDueDateClass(s)}">${formatDate(s.due_date)}</td>
       <td class="number">${formatMoney(s.total_amount)}</td>
       <td class="number text-success">${formatMoney(s.paid_amount)}</td>
       <td class="number ${s.total_amount - s.paid_amount > 0 ? 'text-danger' : 'text-success'}">${formatMoney(s.total_amount - s.paid_amount)}</td>
       <td>${statusBadge(s.status)}</td>
-      <td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" onclick="viewSaleDetail(${s.id})">عرض</button>
-        ${s.status !== 'paid' && s.status !== 'cancelled' ? `<button class="btn btn-danger btn-sm" onclick="cancelSale(${s.id})">إلغاء</button>` : ''}
+        ${canChangeStatus && !isInvoiceFinal(s.status)
+          ? `<button class="btn btn-secondary btn-sm" onclick="openChangeSaleStatusModal(${s.id})">تغيير الحالة</button>`
+          : ''}
+        ${canChangeStatus && !isInvoiceFinal(s.status)
+          ? `<button class="btn btn-danger btn-sm" onclick="cancelSale(${s.id})">إلغاء</button>`
+          : ''}
       </td>
     </tr>
   `).join('');
@@ -87,11 +103,55 @@ async function filterSales() {
   window._salesData = data;
 }
 
+function canUserChangeInvoiceStatus() {
+  const role = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.role : '';
+  return ['مدير عام', 'مدير', 'محاسب', 'مدير مبيعات', 'مدير قسم'].includes(role);
+}
+
 async function cancelSale(id) {
   if (!confirm('هل تريد إلغاء هذه الفاتورة؟')) return;
   await api.cancelSale(id);
   toast('تم إلغاء الفاتورة', 'success');
   renderSales();
+}
+
+function openChangeSaleStatusModal(id) {
+  const sales = window._salesData || [];
+  const s = sales.find(x => x.id === id);
+  if (!s) return;
+  openModal(`تغيير حالة الفاتورة ${s.invoice_number}`, `
+    <div style="margin-bottom:16px">
+      <p>العميل: <strong>${s.customer}</strong></p>
+      <p>الحالة الحالية: ${statusBadge(s.status)}</p>
+    </div>
+    <div class="form-group">
+      <label>الحالة الجديدة *</label>
+      <select id="change-status-val">
+        <option value="draft"     ${s.status==='draft'     ?'selected':''}>مسودة</option>
+        <option value="sent"      ${s.status==='sent'      ?'selected':''}>مرسلة / معلقة</option>
+        <option value="partial"   ${s.status==='partial'   ?'selected':''}>جزئي مدفوع</option>
+        <option value="paid"      ${s.status==='paid'      ?'selected':''}>مدفوعة</option>
+        <option value="cancelled" ${s.status==='cancelled' ?'selected':''}>ملغاة</option>
+        <option value="rejected"  ${s.status==='rejected'  ?'selected':''}>مرفوضة</option>
+      </select>
+    </div>
+    <div style="margin-top:16px;text-align:left">
+      <button class="btn btn-primary" onclick="confirmChangeSaleStatus(${id})">💾 تأكيد التغيير</button>
+    </div>
+  `);
+}
+
+async function confirmChangeSaleStatus(id) {
+  const newStatus = document.getElementById('change-status-val').value;
+  try {
+    await api.updateSaleStatus(id, newStatus);
+    closeModal();
+    toast('تم تغيير حالة الفاتورة بنجاح', 'success');
+    renderSales();
+    loadNotifications();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
 }
 
 async function viewSaleDetail(id) {

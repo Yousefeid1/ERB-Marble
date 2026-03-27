@@ -3,6 +3,7 @@
 // ============================================
 
 const ROLE_BADGE = {
+  'مدير عام':       'badge-danger',
   'مدير':           'badge-danger',
   'محاسب':          'badge-gold',
   'موظف مبيعات':   'badge-success',
@@ -10,9 +11,20 @@ const ROLE_BADGE = {
   'موظف مشتريات': 'badge-info',
   'موظف تصنيع':   'badge-warning',
   'مدير تصنيع':   'badge-info',
+  'مشرف تصنيع':   'badge-warning',
+  'موظف لوجستيك': 'badge-info',
+  'مدير قسم':      'badge-gold',
+  'موظف عادي':     'badge-info',
 };
 
-const EMPLOYEE_ROLES = ['محاسب', 'موظف مبيعات', 'مدير مبيعات', 'موظف مشتريات', 'موظف تصنيع', 'مدير تصنيع', 'مدير'];
+const WORK_STATUS_BADGE = {
+  'active':     ['badge-success', 'نشط'],
+  'on_leave':   ['badge-warning', 'إجازة'],
+  'resigned':   ['badge-danger',  'مستقيل'],
+  'terminated': ['badge-danger',  'تم الفصل'],
+};
+
+const EMPLOYEE_ROLES = ['مدير عام', 'مدير قسم', 'محاسب', 'موظف مبيعات', 'مدير مبيعات', 'موظف مشتريات', 'موظف تصنيع', 'مشرف تصنيع', 'مدير تصنيع', 'موظف لوجستيك', 'موظف عادي'];
 
 // ===== EMPLOYEES PAGE =====
 async function renderEmployees() {
@@ -28,8 +40,9 @@ async function renderEmployees() {
 
       <div class="report-summary">
         <div class="summary-box gold"><div class="label">إجمالي الموظفين</div><div class="value">${users.length}</div></div>
-        <div class="summary-box profit"><div class="label">حسابات نشطة</div><div class="value">${users.filter(u => u.active !== false).length}</div></div>
-        <div class="summary-box loss"><div class="label">حسابات موقوفة</div><div class="value">${users.filter(u => u.active === false).length}</div></div>
+        <div class="summary-box profit"><div class="label">نشطون</div><div class="value">${users.filter(u => (u.work_status || 'active') === 'active').length}</div></div>
+        <div class="summary-box"><div class="label">إجازة</div><div class="value">${users.filter(u => u.work_status === 'on_leave').length}</div></div>
+        <div class="summary-box loss"><div class="label">مستقيل / مفصول</div><div class="value">${users.filter(u => u.work_status === 'resigned' || u.work_status === 'terminated').length}</div></div>
       </div>
 
       <div class="card" style="padding:0">
@@ -37,7 +50,7 @@ async function renderEmployees() {
           <table>
             <thead><tr>
               <th>الاسم</th><th>البريد الإلكتروني</th><th>الدور الوظيفي</th>
-              <th>القسم</th><th>الهاتف</th><th>الحالة</th><th>إجراءات</th>
+              <th>القسم</th><th>الهاتف</th><th>الراتب</th><th>حالة العمل</th><th>إجراءات</th>
             </tr></thead>
             <tbody id="emp-tbody">${renderEmployeeRows(users)}</tbody>
           </table>
@@ -51,31 +64,33 @@ async function renderEmployees() {
 }
 
 function renderEmployeeRows(users) {
-  if (!users.length) return `<tr><td colspan="7"><div class="empty-state" style="padding:40px"><div class="empty-icon">👥</div><h3>لا يوجد موظفون</h3></div></td></tr>`;
-  return users.map(u => `
+  if (!users.length) return `<tr><td colspan="8"><div class="empty-state" style="padding:40px"><div class="empty-icon">👥</div><h3>لا يوجد موظفون</h3></div></td></tr>`;
+  return users.map(u => {
+    const ws = u.work_status || 'active';
+    const [wsCls, wsLabel] = WORK_STATUS_BADGE[ws] || ['badge-info', ws];
+    return `
     <tr>
-      <td><strong>${u.name}</strong></td>
+      <td><strong>${u.name}</strong>${u.national_id ? `<br><small class="text-muted">${u.national_id}</small>` : ''}</td>
       <td class="text-muted">${u.email}</td>
       <td><span class="badge ${ROLE_BADGE[u.role] || 'badge-info'}">${u.role}</span></td>
       <td>${u.department || '-'}</td>
       <td>${u.phone || '-'}</td>
-      <td>${u.active !== false
-        ? '<span class="badge badge-success">نشط</span>'
-        : '<span class="badge badge-danger">موقوف</span>'}</td>
+      <td class="number">${u.salary ? formatMoney(u.salary) : '-'}</td>
+      <td><span class="badge ${wsCls}">${wsLabel}</span></td>
       <td style="display:flex;gap:4px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" onclick="openEditEmployeeModal(${u.id})">تعديل</button>
         ${u.id !== 1
-          ? `<button class="btn btn-sm ${u.active !== false ? 'btn-danger' : 'btn-success'}"
-               data-emp-id="${u.id}" data-active="${u.active !== false}"
-               onclick="toggleEmployeeActive(parseInt(this.dataset.empId), this.dataset.active === 'true')">
-               ${u.active !== false ? 'إيقاف' : 'تفعيل'}
+          ? `<button class="btn btn-sm ${ws === 'active' ? 'btn-danger' : 'btn-success'}"
+               data-emp-id="${u.id}" data-work-status="${ws}"
+               onclick="cycleEmployeeStatus(parseInt(this.dataset.empId), this.dataset.workStatus)">
+               ${ws === 'active' ? 'إيقاف' : 'تفعيل'}
              </button>`
           : ''}
         <button class="btn btn-secondary btn-sm" data-emp-id="${u.id}" data-emp-name="${u.name.replace(/"/g,'&quot;')}"
           onclick="viewEmployeeActivity(parseInt(this.dataset.empId), this.dataset.empName)">📋 النشاط</button>
       </td>
     </tr>
-  `).join('');
+  `}).join('');
 }
 
 function openNewEmployeeModal() {
@@ -94,6 +109,10 @@ function openNewEmployeeModal() {
         <input type="password" id="nemp-pass" placeholder="كلمة المرور">
       </div>
       <div class="form-group">
+        <label>الرقم القومي / ID</label>
+        <input type="text" id="nemp-national" placeholder="14 رقم">
+      </div>
+      <div class="form-group">
         <label>الدور الوظيفي *</label>
         <select id="nemp-role">
           ${EMPLOYEE_ROLES.map(r => `<option value="${r}">${r}</option>`).join('')}
@@ -106,6 +125,19 @@ function openNewEmployeeModal() {
       <div class="form-group">
         <label>الهاتف</label>
         <input type="text" id="nemp-phone" placeholder="01xxxxxxxxx">
+      </div>
+      <div class="form-group">
+        <label>الراتب (EGP)</label>
+        <input type="number" id="nemp-salary" placeholder="0" min="0">
+      </div>
+      <div class="form-group">
+        <label>حالة العمل</label>
+        <select id="nemp-workstatus">
+          <option value="active">نشط</option>
+          <option value="on_leave">إجازة</option>
+          <option value="resigned">مستقيل</option>
+          <option value="terminated">تم الفصل</option>
+        </select>
       </div>
     </div>
     <div style="margin-top:8px;padding:12px;background:var(--bg-input);border-radius:8px;font-size:13px">
@@ -145,8 +177,11 @@ async function saveNewEmployee() {
   try {
     await api.createUser({
       name, email, password: pass, role,
-      department: document.getElementById('nemp-dept').value,
-      phone:      document.getElementById('nemp-phone').value,
+      department:  document.getElementById('nemp-dept').value,
+      phone:       document.getElementById('nemp-phone').value,
+      national_id: document.getElementById('nemp-national').value,
+      salary:      parseFloat(document.getElementById('nemp-salary').value) || 0,
+      work_status: document.getElementById('nemp-workstatus').value,
     });
     closeModal();
     toast('تم إضافة الموظف بنجاح', 'success');
@@ -176,6 +211,10 @@ function openEditEmployeeModal(id) {
         <input type="password" id="eemp-pass" placeholder="كلمة مرور جديدة">
       </div>
       <div class="form-group">
+        <label>الرقم القومي / ID</label>
+        <input type="text" id="eemp-national" value="${u.national_id || ''}" placeholder="14 رقم">
+      </div>
+      <div class="form-group">
         <label>الدور الوظيفي *</label>
         <select id="eemp-role" ${u.id === 1 ? 'disabled' : ''}>
           ${EMPLOYEE_ROLES.map(r => `<option value="${r}" ${r === u.role ? 'selected' : ''}>${r}</option>`).join('')}
@@ -188,6 +227,19 @@ function openEditEmployeeModal(id) {
       <div class="form-group">
         <label>الهاتف</label>
         <input type="text" id="eemp-phone" value="${u.phone || ''}">
+      </div>
+      <div class="form-group">
+        <label>الراتب (EGP)</label>
+        <input type="number" id="eemp-salary" value="${u.salary || 0}" min="0">
+      </div>
+      <div class="form-group">
+        <label>حالة العمل</label>
+        <select id="eemp-workstatus" ${u.id === 1 ? 'disabled' : ''}>
+          <option value="active"     ${(u.work_status||'active') === 'active'     ? 'selected':''}>نشط</option>
+          <option value="on_leave"   ${u.work_status === 'on_leave'               ? 'selected':''}>إجازة</option>
+          <option value="resigned"   ${u.work_status === 'resigned'               ? 'selected':''}>مستقيل</option>
+          <option value="terminated" ${u.work_status === 'terminated'             ? 'selected':''}>تم الفصل</option>
+        </select>
       </div>
     </div>
     <div style="margin-top:16px;text-align:left">
@@ -206,9 +258,13 @@ async function saveEditEmployee(id) {
 
   const data = {
     name, email,
-    role:       document.getElementById('eemp-role').value,
-    department: document.getElementById('eemp-dept').value,
-    phone:      document.getElementById('eemp-phone').value,
+    role:        document.getElementById('eemp-role').value,
+    department:  document.getElementById('eemp-dept').value,
+    phone:       document.getElementById('eemp-phone').value,
+    national_id: document.getElementById('eemp-national').value,
+    salary:      parseFloat(document.getElementById('eemp-salary').value) || 0,
+    work_status: document.getElementById('eemp-workstatus').value,
+    active:      document.getElementById('eemp-workstatus').value === 'active',
   };
   if (pass) data.password = pass;
 
@@ -222,14 +278,26 @@ async function saveEditEmployee(id) {
   }
 }
 
-async function toggleEmployeeActive(id, currentlyActive) {
+// Rename to clarify toggle behavior (active ↔ terminated)
+async function toggleEmployeeActiveStatus(id, currentStatus) {
+  const newStatus = currentStatus === 'active' ? 'terminated' : 'active';
   try {
-    await api.updateUser(id, { active: !currentlyActive });
-    toast(currentlyActive ? 'تم إيقاف الحساب' : 'تم تفعيل الحساب', 'success');
+    await api.updateUser(id, { work_status: newStatus, active: newStatus === 'active' });
+    toast(newStatus === 'active' ? 'تم تفعيل الحساب' : 'تم إيقاف الحساب', 'success');
     renderEmployees();
   } catch (e) {
     toast(e.message, 'error');
   }
+}
+
+// Keep backward-compatible alias
+async function cycleEmployeeStatus(id, currentStatus) {
+  return toggleEmployeeActiveStatus(id, currentStatus);
+}
+
+// Keep for backward compatibility
+async function toggleEmployeeActive(id, currentlyActive) {
+  return toggleEmployeeActiveStatus(id, currentlyActive ? 'active' : 'terminated');
 }
 
 async function viewEmployeeActivity(userId, userName) {
