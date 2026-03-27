@@ -147,9 +147,9 @@ const SEED_DATA = {
     { id: 3, name: 'مستودع مواد خام',     location: 'القاهرة - مدينة بدر', manager: 'خالد موظف تصنيع', capacity: 8000, status: 'active', notes: 'تخزين البلوكات الخام قبل التصنيع' },
   ],
   shipments: [
-    { id: 1, shipment_number: 'SHP-2024-001', invoice_id: 1, invoice_number: 'INV-2024-001', customer: 'مقاولون مصر للإنشاء', origin: 'المستودع الرئيسي', destination: 'القاهرة - مشروع فيلا الساحل', driver: 'عمرو السائق', vehicle: 'نقل ثقيل - ق ج ن 123', weight_tons: 5.5, bill_of_lading: 'BOL-2024-001', receiver: 'مهندس أحمد محمود', shipment_date: '2024-02-12', delivery_date: '2024-02-13', status: 'delivered', notes: 'تم التسليم بسلامة' },
-    { id: 2, shipment_number: 'SHP-2024-002', invoice_id: 2, invoice_number: 'INV-2024-002', customer: 'شركة الإعمار المصرية', origin: 'المستودع الرئيسي', destination: 'الجيزة - برج الإعمار', driver: 'حسن السائق', vehicle: 'نقل ثقيل - ق م ص 456', weight_tons: 12.0, bill_of_lading: 'BOL-2024-002', receiver: 'مهندس سامي علي', shipment_date: '2024-02-25', delivery_date: null, status: 'in_transit', notes: 'في الطريق' },
-    { id: 3, shipment_number: 'SHP-2024-003', invoice_id: 3, invoice_number: 'INV-2024-003', customer: 'مشاريع النيل العقارية', origin: 'المستودع الرئيسي', destination: 'الإسكندرية - كمباوند النيل', driver: 'عمرو السائق', vehicle: 'نقل ثقيل - ق ج ن 123', weight_tons: 3.6, bill_of_lading: null, receiver: null, shipment_date: '2024-03-10', delivery_date: null, status: 'pending', notes: 'في انتظار التحميل' },
+    { id: 1, shipment_number: 'SHP-2024-001', invoice_id: 1, invoice_number: 'INV-2024-001', customer: 'مقاولون مصر للإنشاء', ship_type: 'بري', origin: 'المستودع الرئيسي', destination: 'القاهرة - مشروع فيلا الساحل', driver: 'عمرو السائق', vehicle: 'نقل ثقيل - ق ج ن 123', weight_tons: 5.5, bill_of_lading: 'BOL-2024-001', convoy_number: null, receiver: 'مهندس أحمد محمود', shipment_date: '2024-02-12', delivery_date: '2024-02-13', status: 'delivered', currency: 'EGP', exchange_rate: null, products: [{ name: 'رخام أبيض كراراني', qty: 50, unit: 'م²' }], customs_notes: '', notes: 'تم التسليم بسلامة' },
+    { id: 2, shipment_number: 'SHP-2024-002', invoice_id: 2, invoice_number: 'INV-2024-002', customer: 'شركة الإعمار المصرية', ship_type: 'بري', origin: 'المستودع الرئيسي', destination: 'الجيزة - برج الإعمار', driver: 'حسن السائق', vehicle: 'نقل ثقيل - ق م ص 456', weight_tons: 12.0, bill_of_lading: 'BOL-2024-002', convoy_number: null, receiver: 'مهندس سامي علي', shipment_date: '2024-02-25', delivery_date: null, status: 'in_transit', currency: 'EGP', exchange_rate: null, products: [{ name: 'جرانيت أسود مطلق', qty: 100, unit: 'م²' }, { name: 'جرانيت رمادي صواني', qty: 50, unit: 'م²' }], customs_notes: '', notes: 'في الطريق' },
+    { id: 3, shipment_number: 'SHP-2024-003', invoice_id: 3, invoice_number: 'INV-2024-003', customer: 'مشاريع النيل العقارية', ship_type: 'بحري', origin: 'المستودع الرئيسي', destination: 'الإسكندرية - كمباوند النيل', driver: 'عمرو السائق', vehicle: 'نقل ثقيل - ق ج ن 123', weight_tons: 3.6, bill_of_lading: null, convoy_number: 'CNV-2024-001', receiver: null, shipment_date: '2024-03-10', delivery_date: null, status: 'ready_to_ship', currency: 'USD', exchange_rate: 31, products: [{ name: 'رخام أخضر زمرد', qty: 30, unit: 'م²' }], customs_notes: 'خاضع لضريبة تصدير 5%', notes: 'في انتظار التحميل' },
   ],
   warehouse_inventory: [
     { id: 1, warehouse_id: 1, product_id: 1, product_code: 'MBL-001', product_name: 'رخام أبيض كراراني', qty: 150, min_qty: 30 },
@@ -190,8 +190,14 @@ const DB = {
     const _shipments = this.getAll('shipments');
     let shipsMigrated = false;
     _shipments.forEach(s => {
-      if (!('bill_of_lading' in s)) { s.bill_of_lading = null; shipsMigrated = true; }
-      if (!('receiver'       in s)) { s.receiver       = null; shipsMigrated = true; }
+      if (!('bill_of_lading'  in s)) { s.bill_of_lading  = null;   shipsMigrated = true; }
+      if (!('receiver'        in s)) { s.receiver        = null;   shipsMigrated = true; }
+      if (!('ship_type'       in s)) { s.ship_type       = 'بري';  shipsMigrated = true; }
+      if (!('convoy_number'   in s)) { s.convoy_number   = null;   shipsMigrated = true; }
+      if (!('customs_notes'   in s)) { s.customs_notes   = '';     shipsMigrated = true; }
+      if (!('currency'        in s)) { s.currency        = 'EGP';  shipsMigrated = true; }
+      if (!('exchange_rate'   in s)) { s.exchange_rate   = null;   shipsMigrated = true; }
+      if (!('products'        in s)) { s.products        = [];     shipsMigrated = true; }
     });
     if (shipsMigrated) this.set('shipments', _shipments);
     // Migration: add missing fields to existing users
@@ -561,12 +567,15 @@ const api = {
     this.logActivity('create', 'logistics', id, `شحنة جديدة: ${num} - ${d.customer}`);
     return shp;
   },
-  async updateShipmentStatus(id, newStatus) {
+  async updateShipmentStatus(id, newStatus, extraData) {
     const s = DB.findById('shipments', id);
     if (!s) throw new Error('الشحنة غير موجودة');
+    const allowedStatuses = ['pending', 'ready_to_ship', 'in_transit', 'arrived', 'delivered', 'cancelled'];
+    if (!allowedStatuses.includes(newStatus)) throw new Error('حالة غير صالحة');
     s.status = newStatus;
+    if (extraData) Object.assign(s, extraData);
     if (newStatus === 'delivered') {
-      s.delivery_date = new Date().toISOString().split('T')[0];
+      s.delivery_date = s.delivery_date || new Date().toISOString().split('T')[0];
       // Auto-update linked sale invoice status
       if (s.invoice_id) {
         const inv = DB.findById('sales', s.invoice_id);
@@ -584,6 +593,36 @@ const api = {
     DB.save('shipments', s);
     this.logActivity('update', 'logistics', parseInt(id), `تحديث حالة شحنة ${s.shipment_number}: ${newStatus}`);
     return s;
+  },
+
+  // ===== SHIPMENT REPORTS =====
+  async reportShipments(params = {}) {
+    const DELAYED_SLA_DAYS = 7; // Shipments older than this without delivery are considered delayed
+    let items = DB.getAll('shipments');
+    if (params.ship_type) items = items.filter(i => i.ship_type === params.ship_type);
+    if (params.status)    items = items.filter(i => i.status === params.status);
+    if (params.date_from) items = items.filter(i => i.shipment_date >= params.date_from);
+    if (params.date_to)   items = items.filter(i => i.shipment_date <= params.date_to);
+
+    const seaShipments   = items.filter(i => i.ship_type === 'بحري');
+    const landShipments  = items.filter(i => i.ship_type === 'بري');
+    const delivered      = items.filter(i => i.status === 'delivered');
+    const delayed        = items.filter(i => {
+      if (i.status === 'delivered' || i.status === 'cancelled') return false;
+      const expected = new Date(i.shipment_date);
+      expected.setDate(expected.getDate() + DELAYED_SLA_DAYS);
+      return new Date() > expected;
+    });
+
+    return {
+      total: items.length,
+      sea_count: seaShipments.length,
+      land_count: landShipments.length,
+      delivered_count: delivered.length,
+      delayed_count: delayed.length,
+      items: items.sort((a, b) => new Date(b.shipment_date) - new Date(a.shipment_date)),
+      delayed,
+    };
   },
 
   // ===== WAREHOUSE INVENTORY =====

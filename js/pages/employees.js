@@ -338,6 +338,10 @@ async function renderActivityLog() {
     content.innerHTML = `
       <div class="page-header">
         <div><h2>سجل الأنشطة</h2><p>مراجعة آخر العمليات المنفذة من الموظفين</p></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" onclick="exportActivityLogExcel()">📊 Excel</button>
+          <button class="btn btn-secondary" onclick="exportActivityLogPDF()">📄 PDF</button>
+        </div>
       </div>
 
       <div class="filters-bar">
@@ -403,4 +407,75 @@ async function filterActivityLog() {
   if (entityType) params.entity_type = entityType;
   const logs = await api.activityLog(params);
   document.getElementById('log-tbody').innerHTML = renderActivityLogRows(logs);
+}
+
+// ===== EXPORT: ACTIVITY LOG EXCEL =====
+function exportActivityLogExcel() {
+  const logs = window._activityLogs || [];
+  if (!logs.length) { toast('لا توجد بيانات للتصدير', 'error'); return; }
+  if (typeof XLSX === 'undefined') { toast('مكتبة Excel غير محملة بعد', 'error'); return; }
+
+  const actionLabels = { create: 'إنشاء', update: 'تعديل', delete: 'حذف', login: 'دخول' };
+  const rows = logs.map(l => ({
+    'التاريخ':    new Date(l.created_at).toLocaleDateString('ar-EG'),
+    'الوقت':      new Date(l.created_at).toLocaleTimeString('ar-EG'),
+    'الموظف':     l.user_name,
+    'الإجراء':    actionLabels[l.action] || l.action,
+    'النوع':      l.entity_type,
+    'التفاصيل':   l.description,
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = Object.keys(rows[0]).map(() => ({ wch: 20 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'سجل الأنشطة');
+  XLSX.writeFile(wb, `activity-log-${new Date().toISOString().split('T')[0]}.xlsx`);
+  toast('تم تصدير Excel بنجاح', 'success');
+}
+
+// ===== EXPORT: ACTIVITY LOG PDF =====
+function exportActivityLogPDF() {
+  const logs = window._activityLogs || [];
+  if (!logs.length) { toast('لا توجد بيانات للتصدير', 'error'); return; }
+  if (typeof window.jspdf === 'undefined') { toast('مكتبة PDF غير محملة بعد', 'error'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+  doc.setFontSize(16);
+  doc.text('سجل الأنشطة - نظام ERP الرخام والجرانيت', 148, 15, { align: 'center' });
+  doc.setFontSize(10);
+  doc.text(`تاريخ التصدير: ${new Date().toLocaleDateString('ar-EG')}`, 148, 22, { align: 'center' });
+
+  const actionLabels = { create: 'إنشاء', update: 'تعديل', delete: 'حذف', login: 'دخول' };
+  let y = 32;
+  const cols = [15, 45, 75, 110, 135, 165, 200];
+  const headers = ['#', 'التاريخ', 'الموظف', 'الإجراء', 'النوع', 'التفاصيل'];
+
+  doc.setFillColor(40, 40, 40);
+  doc.rect(10, y - 5, 277, 8, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(9);
+  headers.forEach((h, i) => doc.text(h, cols[i], y));
+  doc.setTextColor(0, 0, 0);
+  y += 8;
+
+  logs.forEach((l, idx) => {
+    if (y > 185) { doc.addPage(); y = 20; }
+    const dateStr = new Date(l.created_at).toLocaleDateString('ar-EG') + ' ' + new Date(l.created_at).toLocaleTimeString('ar-EG');
+    const row = [
+      String(idx + 1),
+      dateStr.substring(0, 18),
+      (l.user_name || '').substring(0, 18),
+      actionLabels[l.action] || l.action,
+      (l.entity_type || '').substring(0, 14),
+      (l.description || '').substring(0, 50),
+    ];
+    doc.setFontSize(8);
+    row.forEach((cell, i) => doc.text(cell, cols[i], y));
+    y += 7;
+  });
+
+  doc.save(`activity-log-${new Date().toISOString().split('T')[0]}.pdf`);
+  toast('تم تصدير PDF بنجاح', 'success');
 }

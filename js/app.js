@@ -15,7 +15,7 @@ const ROLE_PAGES = {
   'موظف تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'products', 'notifications'],
   'مدير تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'products', 'report-waste', 'report-inventory', 'notifications'],
   'مشرف تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'products', 'notifications'],
-  'موظف لوجستيك':  ['dashboard', 'warehouses', 'shipments', 'notifications'],
+  'موظف لوجستيك':  ['dashboard', 'warehouses', 'shipments', 'shipment-report', 'notifications'],
   'مدير قسم':       ['dashboard', 'employees', 'activity-log', 'sales', 'customers', 'report-pl', 'notifications'],
   'موظف عادي':      ['dashboard', 'notifications'],
 };
@@ -65,12 +65,37 @@ async function initApp() {
   // Apply role-based sidebar
   filterSidebarByRole();
 
+  // Check for delayed shipments and create notifications
+  checkDelayedShipments();
+
   // Load notifications
   loadNotifications();
   setInterval(loadNotifications, 60000);
 
   // Show dashboard
   showPage('dashboard');
+}
+
+async function checkDelayedShipments() {
+  try {
+    const r = await api.reportShipments();
+    if (r.delayed && r.delayed.length > 0) {
+      const existingNotifs = await api.notifications();
+      r.delayed.forEach(s => {
+        const alreadyNotified = existingNotifs.some(n => n.message && n.message.includes(s.shipment_number) && n.title === 'شحنة متأخرة');
+        if (!alreadyNotified) {
+          DB.save('notifications', {
+            id: DB.nextId('notifications'),
+            title: 'شحنة متأخرة',
+            message: `الشحنة ${s.shipment_number} (${s.customer}) متأخرة عن الموعد المتوقع`,
+            type: 'danger',
+            is_read: false,
+            created_at: new Date().toISOString(),
+          });
+        }
+      });
+    }
+  } catch(e) {}
 }
 
 async function loadNotifications() {
@@ -135,6 +160,7 @@ const pageTitles = {
   'activity-log':     'سجل الأنشطة',
   'warehouses':       'إدارة المستودعات',
   'shipments':        'الشحن والتوصيل',
+  'shipment-report':  'تقارير التصدير',
 };
 
 function showPage(pageName) {
@@ -183,6 +209,7 @@ function showPage(pageName) {
     'activity-log':     renderActivityLog,
     'warehouses':       renderWarehouses,
     'shipments':        renderShipments,
+    'shipment-report':  renderShipmentReport,
   };
 
   if (renders[pageName]) renders[pageName]();
@@ -243,7 +270,9 @@ function statusBadge(status) {
     'processed':  ['badge-gold',    'مُصنَّع'],
     'in_cutting': ['badge-warning', 'في القطع'],
     'pending':    ['badge-warning', 'قيد التنفيذ'],
+    'ready_to_ship': ['badge-info', 'مستعد للشحن'],
     'in_transit': ['badge-info',    'في الطريق'],
+    'arrived':    ['badge-warning', 'وصل المخزن/العميل'],
     'delivered':  ['badge-success', 'تم التسليم'],
     'on_leave':   ['badge-warning', 'إجازة'],
     'resigned':   ['badge-danger',  'مستقيل'],

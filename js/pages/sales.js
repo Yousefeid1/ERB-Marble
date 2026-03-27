@@ -15,7 +15,11 @@ async function renderSales() {
           <h2>فواتير المبيعات</h2>
           <p>إدارة وتتبع جميع فواتير البيع</p>
         </div>
-        <button class="btn btn-primary" onclick="openNewSaleModal()">＋ فاتورة جديدة</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" onclick="exportSalesExcel()">📊 Excel</button>
+          <button class="btn btn-secondary" onclick="exportSalesPDF()">📄 PDF</button>
+          <button class="btn btn-primary" onclick="openNewSaleModal()">＋ فاتورة جديدة</button>
+        </div>
       </div>
 
       <div class="filters-bar">
@@ -412,4 +416,83 @@ async function renderAging() {
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">${e.message}</p></div>`;
   }
+}
+
+// ===== EXPORT: SALES PDF =====
+function exportSalesPDF() {
+  const sales = window._salesData || [];
+  if (!sales.length) { toast('لا توجد بيانات للتصدير', 'error'); return; }
+  if (typeof window.jspdf === 'undefined') { toast('مكتبة PDF غير محملة بعد، حاول مجدداً', 'error'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+  doc.setFontSize(16);
+  doc.text('فواتير المبيعات - نظام ERP الرخام والجرانيت', 148, 15, { align: 'center' });
+  doc.setFontSize(10);
+  doc.text(`تاريخ التصدير: ${new Date().toLocaleDateString('ar-EG')}`, 148, 22, { align: 'center' });
+
+  const statusLabel = { draft: 'مسودة', sent: 'مرسلة', partial: 'جزئي', paid: 'مسددة', cancelled: 'ملغاة', rejected: 'مرفوضة' };
+  let y = 32;
+  const cols = [15, 50, 90, 130, 155, 185, 215, 245, 265];
+  const headers = ['#', 'رقم الفاتورة', 'العميل', 'التاريخ', 'الإجمالي', 'المدفوع', 'المتبقي', 'الحالة'];
+
+  doc.setFillColor(40, 40, 40);
+  doc.rect(10, y - 5, 277, 8, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(9);
+  headers.forEach((h, i) => doc.text(h, cols[i], y));
+  doc.setTextColor(0, 0, 0);
+  y += 8;
+
+  sales.forEach((s, idx) => {
+    if (y > 185) { doc.addPage(); y = 20; }
+    const row = [
+      String(idx + 1),
+      s.invoice_number,
+      (s.customer || '').substring(0, 22),
+      formatDate(s.invoice_date),
+      String(parseFloat(s.total_amount || 0).toFixed(2)),
+      String(parseFloat(s.paid_amount || 0).toFixed(2)),
+      String(parseFloat((s.total_amount || 0) - (s.paid_amount || 0)).toFixed(2)),
+      statusLabel[s.status] || s.status,
+    ];
+    doc.setFontSize(8);
+    row.forEach((cell, i) => doc.text(cell, cols[i], y));
+    y += 7;
+  });
+
+  doc.save(`sales-${new Date().toISOString().split('T')[0]}.pdf`);
+  toast('تم تصدير PDF بنجاح', 'success');
+}
+
+// ===== EXPORT: SALES EXCEL =====
+function exportSalesExcel() {
+  const sales = window._salesData || [];
+  if (!sales.length) { toast('لا توجد بيانات للتصدير', 'error'); return; }
+  if (typeof XLSX === 'undefined') { toast('مكتبة Excel غير محملة بعد', 'error'); return; }
+
+  const statusLabel = { draft: 'مسودة', sent: 'مرسلة', partial: 'جزئي', paid: 'مسددة', cancelled: 'ملغاة', rejected: 'مرفوضة' };
+  const settings = DB.get('settings') || {};
+  const rate = settings.exchange_rate || 1;
+
+  const rows = sales.map(s => ({
+    'رقم الفاتورة':          s.invoice_number,
+    'العميل':                s.customer,
+    'تاريخ الفاتورة':        s.invoice_date,
+    'تاريخ الاستحقاق':       s.due_date || '-',
+    'الإجمالي (EGP)':        s.total_amount || 0,
+    'الإجمالي (USD)':        rate > 0 ? +((s.total_amount || 0) / rate).toFixed(2) : '-',
+    'المدفوع (EGP)':         s.paid_amount || 0,
+    'المتبقي (EGP)':         (s.total_amount || 0) - (s.paid_amount || 0),
+    'الحالة':                statusLabel[s.status] || s.status,
+    'ملاحظات':               s.notes || '-',
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = Object.keys(rows[0]).map(() => ({ wch: 20 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'فواتير المبيعات');
+  XLSX.writeFile(wb, `sales-${new Date().toISOString().split('T')[0]}.xlsx`);
+  toast('تم تصدير Excel بنجاح', 'success');
 }
