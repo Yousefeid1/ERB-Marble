@@ -331,7 +331,11 @@ async function renderCustomers() {
     content.innerHTML = `
       <div class="page-header">
         <div><h2>العملاء</h2><p>إدارة بيانات العملاء</p></div>
-        <button class="btn btn-primary" onclick="openNewCustomerModal()">＋ عميل جديد</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" onclick="exportCustomersExcel()">📊 Excel</button>
+          <button class="btn btn-secondary" onclick="exportCustomersPDF()">📄 PDF</button>
+          <button class="btn btn-primary" onclick="openNewCustomerModal()">＋ عميل جديد</button>
+        </div>
       </div>
       <div class="filters-bar">
         <input type="text" id="cust-search" placeholder="بحث باسم العميل..." oninput="filterCustomers()" style="flex:1">
@@ -491,4 +495,21 @@ function exportSalesExcel() {
   const totalPaid = sales.reduce((s, i) => s + (i.paid_amount || 0), 0);
   const totalsRow = ['الإجمالي', '', '', '', '', totalAmt, '', totalPaid, totalAmt - totalPaid, '', ''];
   exportGenericExcel({ sheetName: 'فواتير المبيعات', headers, rows, totalsRow, filename: `sales-${new Date().toISOString().split('T')[0]}.xlsx` });
+}
+
+// ===== EXPORT: CUSTOMERS =====
+function exportCustomersPDF() {
+  const customers = window._customersListData || [];
+  const headers = ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'العنوان', 'الرصيد المستحق'];
+  const rows = customers.map((c, i) => [i + 1, (c.name || '').substring(0, 22), c.phone || '-', (c.email || '-').substring(0, 20), (c.address || '-').substring(0, 18), parseFloat(c.balance || 0).toFixed(2) + ' EGP']);
+  const totalBalance = customers.reduce((s, c) => s + (c.balance || 0), 0);
+  exportGenericPDF({ title: 'العملاء', subtitle: 'نظام ERP - الرخام والجرانيت', headers, rows, totalsRow: ['', '', '', '', 'إجمالي المستحقات', totalBalance.toFixed(2) + ' EGP'], filename: `customers-${new Date().toISOString().split('T')[0]}.pdf`, orientation: 'portrait' });
+}
+
+function exportCustomersExcel() {
+  const customers = window._customersListData || [];
+  const headers = ['الاسم', 'الهاتف', 'البريد الإلكتروني', 'العنوان', 'الرصيد المستحق (EGP)', 'تاريخ الإنشاء'];
+  const rows = customers.map(c => [c.name, c.phone || '-', c.email || '-', c.address || '-', c.balance || 0, c.created_at || '-']);
+  const totalBalance = customers.reduce((s, c) => s + (c.balance || 0), 0);
+  exportGenericExcel({ sheetName: 'العملاء', headers, rows, totalsRow: ['الإجمالي', '', '', '', totalBalance, ''], filename: `customers-${new Date().toISOString().split('T')[0]}.xlsx` });
 }

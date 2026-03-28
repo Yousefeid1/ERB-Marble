@@ -14,7 +14,11 @@ async function renderBlocks() {
     content.innerHTML = `
       <div class="page-header">
         <div><h2>البلوكات الخام</h2><p>إدارة مخزون البلوكات الواردة</p></div>
-        <button class="btn btn-primary" onclick="openNewBlockModal()">＋ بلوك جديد</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" onclick="exportBlocksExcel()">📊 Excel</button>
+          <button class="btn btn-secondary" onclick="exportBlocksPDF()">📄 PDF</button>
+          <button class="btn btn-primary" onclick="openNewBlockModal()">＋ بلوك جديد</button>
+        </div>
       </div>
       <div class="report-summary">
         <div class="summary-box gold"><div class="label">إجمالي البلوكات</div><div class="value">${blocks.length}</div></div>
@@ -43,6 +47,7 @@ async function renderBlocks() {
         </div>
       </div>
     `;
+    window._blocksData = blocks;
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">${e.message}</p></div>`;
   }
@@ -118,7 +123,11 @@ async function renderCutting() {
     content.innerHTML = `
       <div class="page-header">
         <div><h2>عمليات القطع</h2><p>تتبع دفعات القطع والتصنيع</p></div>
-        <button class="btn btn-primary" onclick="openNewCuttingModal()">＋ دفعة قطع جديدة</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" onclick="exportCuttingExcel()">📊 Excel</button>
+          <button class="btn btn-secondary" onclick="exportCuttingPDF()">📄 PDF</button>
+          <button class="btn btn-primary" onclick="openNewCuttingModal()">＋ دفعة قطع جديدة</button>
+        </div>
       </div>
       <div class="card" style="padding:0">
         <div class="data-table-wrapper">
@@ -150,6 +159,7 @@ async function renderCutting() {
         </div>
       </div>
     `;
+    window._cuttingData   = batches;
     window._cuttingBlocks = blocks;
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">${e.message}</p></div>`;
@@ -215,7 +225,7 @@ async function renderSlabs() {
     const totalArea = slabs.filter(s => s.status === 'in_stock').reduce((s, sl) => s + sl.area_m2, 0);
 
     content.innerHTML = `
-      <div class="page-header"><div><h2>الألواح (Slabs)</h2><p>مخزون الألواح المقطوعة</p></div></div>
+      <div class="page-header"><div><h2>الألواح (Slabs)</h2><p>مخزون الألواح المقطوعة</p></div><div style="display:flex;gap:8px"><button class="btn btn-secondary" onclick="exportSlabsExcel()">📊 Excel</button><button class="btn btn-secondary" onclick="exportSlabsPDF()">📄 PDF</button></div></div>
       <div class="report-summary">
         <div class="summary-box gold"><div class="label">إجمالي الألواح</div><div class="value">${slabs.length}</div></div>
         <div class="summary-box profit"><div class="label">في المخزن</div><div class="value">${inStock}</div></div>
@@ -242,6 +252,7 @@ async function renderSlabs() {
         </div>
       </div>
     `;
+    window._slabsData = slabs;
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">${e.message}</p></div>`;
   }
@@ -268,4 +279,60 @@ async function filterSlabs() {
   const status = document.getElementById('slab-status').value;
   const slabs  = await api.slabs({ status });
   document.getElementById('slab-tbody').innerHTML = renderSlabRows(slabs);
+}
+
+// ===== EXPORT: BLOCKS =====
+function exportBlocksPDF() {
+  const blocks = window._blocksData || [];
+  const statusLabel = { in_stock: 'في المخزن', in_cutting: 'في القطع', processed: 'مُصنَّع' };
+  const headers = ['#', 'الكود', 'النوع', 'المصدر', 'الوزن (طن)', 'التكلفة', 'تاريخ الاستلام', 'الحالة'];
+  const rows = blocks.map((b, i) => [i + 1, b.code, (b.type || '').substring(0, 18), b.origin, b.weight_tons, parseFloat(b.cost || 0).toFixed(2) + ' EGP', formatDate(b.received_date), statusLabel[b.status] || b.status]);
+  const totalCost = blocks.reduce((s, b) => s + (b.cost || 0), 0);
+  exportGenericPDF({ title: 'البلوكات الخام', subtitle: 'نظام ERP - الرخام والجرانيت', headers, rows, totalsRow: ['', '', '', 'الإجمالي', '', totalCost.toFixed(2) + ' EGP', '', ''], filename: `blocks-${new Date().toISOString().split('T')[0]}.pdf` });
+}
+
+function exportBlocksExcel() {
+  const blocks = window._blocksData || [];
+  const statusLabel = { in_stock: 'في المخزن', in_cutting: 'في القطع', processed: 'مُصنَّع' };
+  const headers = ['الكود', 'النوع', 'المصدر', 'الوزن (طن)', 'العرض (سم)', 'الارتفاع (سم)', 'الطول (سم)', 'التكلفة (EGP)', 'تاريخ الاستلام', 'الحالة'];
+  const rows = blocks.map(b => [b.code, b.type, b.origin, b.weight_tons, b.width, b.height, b.length, b.cost || 0, b.received_date, statusLabel[b.status] || b.status]);
+  const totalCost = blocks.reduce((s, b) => s + (b.cost || 0), 0);
+  exportGenericExcel({ sheetName: 'البلوكات الخام', headers, rows, totalsRow: ['الإجمالي', '', '', '', '', '', '', totalCost, '', ''], filename: `blocks-${new Date().toISOString().split('T')[0]}.xlsx` });
+}
+
+// ===== EXPORT: CUTTING =====
+function exportCuttingPDF() {
+  const batches = window._cuttingData || [];
+  const headers = ['#', 'رقم الدفعة', 'كود البلوك', 'نوع الحجر', 'التاريخ', 'الكلي', 'درجة A', 'درجة B', 'هالك', '% الهالك'];
+  const rows = batches.map((b, i) => [i + 1, b.batch_number, b.block_code, (b.block_type || '').substring(0, 16), formatDate(b.date), b.slabs_count, b.grade_a, b.grade_b, b.waste, b.waste_percentage.toFixed(1) + '%']);
+  const totalSlabs = batches.reduce((s, b) => s + (b.slabs_count || 0), 0);
+  const totalWaste = batches.reduce((s, b) => s + (b.waste || 0), 0);
+  exportGenericPDF({ title: 'عمليات القطع', subtitle: 'نظام ERP - الرخام والجرانيت', headers, rows, totalsRow: ['', '', '', '', 'الإجمالي', totalSlabs, '', '', totalWaste, ''], filename: `cutting-${new Date().toISOString().split('T')[0]}.pdf` });
+}
+
+function exportCuttingExcel() {
+  const batches = window._cuttingData || [];
+  const headers = ['رقم الدفعة', 'كود البلوك', 'نوع الحجر', 'التاريخ', 'المشغّل', 'إجمالي الألواح', 'درجة A', 'درجة B', 'هالك', '% الهالك'];
+  const rows = batches.map(b => [b.batch_number, b.block_code, b.block_type, b.date, b.operator, b.slabs_count, b.grade_a, b.grade_b, b.waste, b.waste_percentage]);
+  const totalSlabs = batches.reduce((s, b) => s + (b.slabs_count || 0), 0);
+  const totalWaste = batches.reduce((s, b) => s + (b.waste || 0), 0);
+  exportGenericExcel({ sheetName: 'عمليات القطع', headers, rows, totalsRow: ['الإجمالي', '', '', '', '', totalSlabs, '', '', totalWaste, ''], filename: `cutting-${new Date().toISOString().split('T')[0]}.xlsx` });
+}
+
+// ===== EXPORT: SLABS =====
+function exportSlabsPDF() {
+  const slabs = window._slabsData || [];
+  const statusLabel = { in_stock: 'في المخزن', sold: 'مباعة', waste: 'هالك' };
+  const headers = ['#', 'الكود', 'كود البلوك', 'النوع', 'الدرجة', 'العرض', 'الارتفاع', 'المساحة (م²)', 'الحالة'];
+  const rows = slabs.map((s, i) => [i + 1, s.code, s.block_code, (s.type || '').substring(0, 16), s.grade, s.width, s.height, s.area_m2.toFixed(2), statusLabel[s.status] || s.status]);
+  const totalArea = slabs.filter(s => s.status === 'in_stock').reduce((sum, s) => sum + s.area_m2, 0);
+  exportGenericPDF({ title: 'الألواح (Slabs)', subtitle: 'نظام ERP - الرخام والجرانيت', headers, rows, totalsRow: ['', '', '', '', '', '', 'المتاح', totalArea.toFixed(2) + ' م²', ''], filename: `slabs-${new Date().toISOString().split('T')[0]}.pdf` });
+}
+
+function exportSlabsExcel() {
+  const slabs = window._slabsData || [];
+  const statusLabel = { in_stock: 'في المخزن', sold: 'مباعة', waste: 'هالك' };
+  const headers = ['الكود', 'كود البلوك', 'النوع', 'الدرجة', 'العرض (سم)', 'الارتفاع (سم)', 'السماكة (سم)', 'المساحة (م²)', 'الحالة'];
+  const rows = slabs.map(s => [s.code, s.block_code, s.type, s.grade, s.width, s.height, s.thickness, s.area_m2, statusLabel[s.status] || s.status]);
+  exportGenericExcel({ sheetName: 'الألواح', headers, rows, filename: `slabs-${new Date().toISOString().split('T')[0]}.xlsx` });
 }

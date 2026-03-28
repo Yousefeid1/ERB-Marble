@@ -180,7 +180,11 @@ async function renderSuppliers() {
     content.innerHTML = `
       <div class="page-header">
         <div><h2>الموردون</h2><p>إدارة بيانات الموردين</p></div>
-        <button class="btn btn-primary" onclick="openNewSupplierModal()">＋ مورد جديد</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" onclick="exportSuppliersExcel()">📊 Excel</button>
+          <button class="btn btn-secondary" onclick="exportSuppliersPDF()">📄 PDF</button>
+          <button class="btn btn-primary" onclick="openNewSupplierModal()">＋ مورد جديد</button>
+        </div>
       </div>
       <div class="filters-bar">
         <input type="text" id="supp-search" placeholder="بحث باسم المورد..." oninput="filterSuppliers()" style="flex:1">
@@ -194,6 +198,7 @@ async function renderSuppliers() {
         </div>
       </div>
     `;
+    window._suppliersListData = suppliers;
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">${e.message}</p></div>`;
   }
@@ -264,4 +269,21 @@ function exportPurchasesExcel() {
   const total = purchases.reduce((s,p)=>s+(p.total_amount||0),0);
   const paid  = purchases.reduce((s,p)=>s+(p.paid_amount||0),0);
   exportGenericExcel({ sheetName:'فواتير الشراء', headers, rows, totalsRow:['الإجمالي','','','','',total,paid,total-paid,''], filename:`purchases-${new Date().toISOString().split('T')[0]}.xlsx` });
+}
+
+// ===== EXPORT: SUPPLIERS =====
+function exportSuppliersPDF() {
+  const suppliers = window._suppliersListData || [];
+  const headers = ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'العنوان', 'المستحق عليه'];
+  const rows = suppliers.map((s, i) => [i + 1, (s.name || '').substring(0, 22), s.phone || '-', (s.email || '-').substring(0, 20), (s.address || '-').substring(0, 18), parseFloat(s.balance || 0).toFixed(2) + ' EGP']);
+  const totalBalance = suppliers.reduce((s, sup) => s + (sup.balance || 0), 0);
+  exportGenericPDF({ title: 'الموردون', subtitle: 'نظام ERP - الرخام والجرانيت', headers, rows, totalsRow: ['', '', '', '', 'إجمالي المستحقات', totalBalance.toFixed(2) + ' EGP'], filename: `suppliers-${new Date().toISOString().split('T')[0]}.pdf`, orientation: 'portrait' });
+}
+
+function exportSuppliersExcel() {
+  const suppliers = window._suppliersListData || [];
+  const headers = ['الاسم', 'الهاتف', 'البريد الإلكتروني', 'العنوان', 'المستحق عليه (EGP)'];
+  const rows = suppliers.map(s => [s.name, s.phone || '-', s.email || '-', s.address || '-', s.balance || 0]);
+  const totalBalance = suppliers.reduce((s, sup) => s + (sup.balance || 0), 0);
+  exportGenericExcel({ sheetName: 'الموردون', headers, rows, totalsRow: ['الإجمالي', '', '', '', totalBalance], filename: `suppliers-${new Date().toISOString().split('T')[0]}.xlsx` });
 }

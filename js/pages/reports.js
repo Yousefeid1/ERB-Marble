@@ -196,7 +196,7 @@ async function renderReportInventory() {
     const lowStock = r.products.filter(p => p.stock_qty <= p.min_stock);
 
     content.innerHTML = `
-      <div class="page-header"><div><h2>تقرير المخزون</h2><p>الوضع الحالي للمخزون</p></div></div>
+      <div class="page-header"><div><h2>تقرير المخزون</h2><p>الوضع الحالي للمخزون</p></div><div style="display:flex;gap:8px"><button class="btn btn-secondary" onclick="exportInventoryExcel()">📊 Excel</button><button class="btn btn-secondary" onclick="exportInventoryPDF()">📄 PDF</button></div></div>
       <div class="report-summary">
         <div class="summary-box gold">  <div class="label">إجمالي قيمة المخزون</div> <div class="value">${formatMoney(r.total_inventory_value)}</div></div>
         <div class="summary-box profit"><div class="label">عدد المنتجات</div>           <div class="value">${r.products.length}</div></div>
@@ -262,7 +262,104 @@ async function renderReportInventory() {
         </div>
       </div>
     `;
+    window._inventoryData = r;
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">${e.message}</p></div>`;
   }
+}
+
+// ===== EXPORT: P&L =====
+function exportPLPDF() {
+  const r = window._plData;
+  if (!r) { toast('لا توجد بيانات', 'error'); return; }
+  const headers = ['البند', 'المبلغ (EGP)'];
+  const rows = [
+    ['إيرادات المبيعات', r.revenue.toFixed(2)],
+    ['تكلفة البضاعة المباعة', '-' + r.cogs.toFixed(2)],
+    ['مجمل الربح', r.gross_profit.toFixed(2)],
+    ...r.expenses.map(e => [e.description, '-' + parseFloat(e.amount).toFixed(2)]),
+    ['إجمالي مصروفات التشغيل', '-' + r.operating_expenses.toFixed(2)],
+  ];
+  const totalsRow = ['صافي الربح', r.net_profit.toFixed(2) + ' EGP'];
+  exportGenericPDF({ title: 'تقرير الأرباح والخسائر', subtitle: 'نظام ERP - الرخام والجرانيت', headers, rows, totalsRow, filename: `pl-${new Date().toISOString().split('T')[0]}.pdf`, orientation: 'portrait' });
+}
+
+function exportPLExcel() {
+  const r = window._plData;
+  if (!r) { toast('لا توجد بيانات', 'error'); return; }
+  const headers = ['البند', 'المبلغ (EGP)'];
+  const rows = [
+    ['إيرادات المبيعات', r.revenue],
+    ['تكلفة البضاعة المباعة', -r.cogs],
+    ['مجمل الربح', r.gross_profit],
+    ...r.expenses.map(e => [e.description, -parseFloat(e.amount)]),
+    ['إجمالي مصروفات التشغيل', -r.operating_expenses],
+    ['صافي الربح', r.net_profit],
+  ];
+  exportGenericExcel({ sheetName: 'الأرباح والخسائر', headers, rows, filename: `pl-${new Date().toISOString().split('T')[0]}.xlsx` });
+}
+
+// ===== EXPORT: BALANCE SHEET =====
+function exportBSPDF() {
+  const d = window._bsData;
+  if (!d) { toast('لا توجد بيانات', 'error'); return; }
+  const typeLabel = { asset: 'أصل', liability: 'خصم', equity: 'حقوق ملكية' };
+  const headers = ['اسم الحساب', 'النوع', 'الرصيد (EGP)'];
+  const rows = (d.accounts || []).filter(a => a.parent_id !== null && a.balance !== 0).map(a => [
+    a.name, typeLabel[a.type] || a.type, parseFloat(a.balance).toFixed(2),
+  ]);
+  const totalsRow = ['إجمالي الأصول / الخصوم + حقوق الملكية', '', d.total_assets.toFixed(2) + ' EGP'];
+  exportGenericPDF({ title: 'الميزانية العمومية', subtitle: 'نظام ERP - الرخام والجرانيت', headers, rows, totalsRow, filename: `balance-sheet-${new Date().toISOString().split('T')[0]}.pdf`, orientation: 'portrait' });
+}
+
+function exportBSExcel() {
+  const d = window._bsData;
+  if (!d) { toast('لا توجد بيانات', 'error'); return; }
+  const typeLabel = { asset: 'أصل', liability: 'خصم', equity: 'حقوق ملكية' };
+  const headers = ['اسم الحساب', 'النوع', 'الرصيد (EGP)'];
+  const rows = (d.accounts || []).filter(a => a.parent_id !== null && a.balance !== 0).map(a => [
+    a.name, typeLabel[a.type] || a.type, a.balance,
+  ]);
+  const totalsRow = ['إجمالي الأصول', '', d.total_assets];
+  exportGenericExcel({ sheetName: 'الميزانية العمومية', headers, rows, totalsRow, filename: `balance-sheet-${new Date().toISOString().split('T')[0]}.xlsx` });
+}
+
+// ===== EXPORT: WASTE =====
+function exportWastePDF() {
+  const r = window._wasteData;
+  if (!r) { toast('لا توجد بيانات', 'error'); return; }
+  const headers = ['رقم الدفعة', 'البلوك', 'النوع', 'التاريخ', 'الكلي', 'درجة A', 'درجة B', 'هالك', '% الهالك'];
+  const rows = r.details.map(b => [b.batch_number, b.block_code, b.block_type, formatDate(b.date), b.slabs_count, b.grade_a, b.grade_b, b.waste, b.waste_percentage.toFixed(1) + '%']);
+  const totalsRow = ['الإجمالي', '', '', '', r.total_slabs, '', '', r.total_waste_slabs, r.avg_waste_percentage.toFixed(1) + '%'];
+  exportGenericPDF({ title: 'تقرير الهالك', subtitle: 'نظام ERP - الرخام والجرانيت', headers, rows, totalsRow, filename: `waste-${new Date().toISOString().split('T')[0]}.pdf` });
+}
+
+function exportWasteExcel() {
+  const r = window._wasteData;
+  if (!r) { toast('لا توجد بيانات', 'error'); return; }
+  const headers = ['رقم الدفعة', 'كود البلوك', 'نوع الحجر', 'التاريخ', 'إجمالي الألواح', 'درجة A', 'درجة B', 'هالك', '% الهالك'];
+  const rows = r.details.map(b => [b.batch_number, b.block_code, b.block_type, b.date, b.slabs_count, b.grade_a, b.grade_b, b.waste, b.waste_percentage]);
+  const totalsRow = ['الإجمالي', '', '', '', r.total_slabs, '', '', r.total_waste_slabs, r.avg_waste_percentage];
+  exportGenericExcel({ sheetName: 'تقرير الهالك', headers, rows, totalsRow, filename: `waste-${new Date().toISOString().split('T')[0]}.xlsx` });
+}
+
+// ===== EXPORT: INVENTORY =====
+function exportInventoryPDF() {
+  const r = window._inventoryData;
+  if (!r) { toast('لا توجد بيانات', 'error'); return; }
+  const headers = ['الكود', 'المنتج', 'الفئة', 'الوحدة', 'المخزون', 'الحد الأدنى', 'سعر الكلفة', 'القيمة الكلية'];
+  const rows = r.products.map(p => [p.code, (p.name || '').substring(0, 20), p.category, p.unit, p.stock_qty, p.min_stock, parseFloat(p.cost).toFixed(2) + ' EGP', (p.cost * p.stock_qty).toFixed(2) + ' EGP']);
+  const totalVal = r.products.reduce((s, p) => s + p.cost * p.stock_qty, 0);
+  const totalsRow = ['', 'الإجمالي', '', '', '', '', '', totalVal.toFixed(2) + ' EGP'];
+  exportGenericPDF({ title: 'تقرير المخزون', subtitle: 'نظام ERP - الرخام والجرانيت', headers, rows, totalsRow, filename: `inventory-${new Date().toISOString().split('T')[0]}.pdf` });
+}
+
+function exportInventoryExcel() {
+  const r = window._inventoryData;
+  if (!r) { toast('لا توجد بيانات', 'error'); return; }
+  const headers = ['الكود', 'المنتج', 'الفئة', 'الوحدة', 'المخزون الحالي', 'الحد الأدنى', 'سعر الكلفة (EGP)', 'القيمة الكلية (EGP)'];
+  const rows = r.products.map(p => [p.code, p.name, p.category, p.unit, p.stock_qty, p.min_stock, p.cost, p.cost * p.stock_qty]);
+  const totalVal = r.products.reduce((s, p) => s + p.cost * p.stock_qty, 0);
+  const totalsRow = ['', 'الإجمالي', '', '', '', '', '', totalVal];
+  exportGenericExcel({ sheetName: 'تقرير المخزون', headers, rows, totalsRow, filename: `inventory-${new Date().toISOString().split('T')[0]}.xlsx` });
 }

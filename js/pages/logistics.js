@@ -19,6 +19,8 @@ async function renderWarehouses() {
       <div class="page-header">
         <div><h2>إدارة المستودعات</h2><p>متابعة المخازن والمخزون</p></div>
         <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" onclick="exportWarehousesExcel()">📊 Excel</button>
+          <button class="btn btn-secondary" onclick="exportWarehousesPDF()">📄 PDF</button>
           <button class="btn btn-secondary" onclick="showPage('shipments')">🚛 الشحن والتوصيل</button>
           <button class="btn btn-primary" onclick="openNewWarehouseModal()">＋ مستودع جديد</button>
         </div>
@@ -907,4 +909,19 @@ function exportShipmentReportPDF() {
 
   doc.save(`shipment-report-${new Date().toISOString().split('T')[0]}.pdf`);
   toast('تم تصدير PDF بنجاح', 'success');
+}
+
+// ===== EXPORT: WAREHOUSES =====
+function exportWarehousesPDF() {
+  const warehouses = window._warehouseData || [];
+  const headers = ['#', 'اسم المستودع', 'الموقع', 'المسؤول', 'السعة (م²)', 'الحالة'];
+  const rows = warehouses.map((w, i) => [i + 1, (w.name || '').substring(0, 20), (w.location || '-').substring(0, 18), w.manager || '-', (w.capacity || 0).toLocaleString('ar-EG'), w.status === 'active' ? 'نشط' : 'مغلق']);
+  exportGenericPDF({ title: 'إدارة المستودعات', subtitle: 'نظام ERP - الرخام والجرانيت', headers, rows, filename: `warehouses-${new Date().toISOString().split('T')[0]}.pdf`, orientation: 'portrait' });
+}
+
+function exportWarehousesExcel() {
+  const warehouses = window._warehouseData || [];
+  const headers = ['اسم المستودع', 'الموقع', 'المسؤول', 'السعة (م²)', 'الحالة', 'ملاحظات'];
+  const rows = warehouses.map(w => [w.name, w.location || '-', w.manager || '-', w.capacity || 0, w.status === 'active' ? 'نشط' : 'مغلق', w.notes || '-']);
+  exportGenericExcel({ sheetName: 'المستودعات', headers, rows, filename: `warehouses-${new Date().toISOString().split('T')[0]}.xlsx` });
 }
