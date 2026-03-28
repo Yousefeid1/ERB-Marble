@@ -2,6 +2,17 @@
 // Mock API Client - Marble ERP (localStorage)
 // ============================================
 
+// دالة تشفير بسيطة للكلمات المرور (للبيئة الأمامية فقط)
+function simpleHash(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return 'h_' + Math.abs(hash).toString(36);
+}
+
 // ===== SEED DATA =====
 // Default employee accounts added during migration
 const DEFAULT_EMPLOYEES = [
@@ -18,8 +29,9 @@ const DEFAULT_EMPLOYEES = [
 
 const SEED_DATA = {
   users: [
-    { id: 1, email: 'admin@marble.com', password: 'admin123', name: 'مدير النظام', role: 'مدير عام', phone: '', department: 'الإدارة العامة', active: true, work_status: 'active', national_id: '', salary: 0 }
+    { id: 1, email: 'admin@marble.com', password: 'admin123', name: 'مدير النظام', role: 'مدير عام', phone: '', department: 'الإدارة العامة', active: true, work_status: 'active', national_id: '', salary: 0, must_change_password: true }
   ],
+  quotations: [],
   activity_log: [],
   settings: {
     company_name: 'شركة الرخام والجرانيت',
@@ -179,6 +191,8 @@ const DB = {
     }
     // Migration: add activity_log if missing
     if (!this.get('activity_log')) this.set('activity_log', []);
+    // Migration: add quotations if missing
+    if (!this.get('quotations')) this.set('quotations', []);
     // Migration: add warehouses/shipments if missing
     if (!this.get('warehouses'))          this.set('warehouses',          SEED_DATA.warehouses);
     if (!this.get('shipments'))           this.set('shipments',           SEED_DATA.shipments);
@@ -243,7 +257,8 @@ const DB = {
       if (!('department'  in u)) { u.department  = '';       usersMigrated = true; }
       if (!('work_status' in u)) { u.work_status = u.active !== false ? 'active' : 'terminated'; usersMigrated = true; }
       if (!('national_id' in u)) { u.national_id = '';       usersMigrated = true; }
-      if (!('salary'      in u)) { u.salary      = 0;        usersMigrated = true; }
+      if (!('salary'          in u)) { u.salary          = 0;     usersMigrated = true; }
+      if (!('must_change_password' in u)) { u.must_change_password = false; usersMigrated = true; }
       // Migrate role 'مدير' to 'مدير عام'
       if (u.role === 'مدير') { u.role = 'مدير عام'; usersMigrated = true; }
     });
@@ -306,7 +321,7 @@ const api = {
     if (user.active === false) throw new Error('تم إيقاف هذا الحساب. تواصل مع المدير.');
     if (user.work_status === 'terminated') throw new Error('تم فصل هذا الموظف. تواصل مع المدير.');
     if (user.work_status === 'resigned')   throw new Error('لقد قدّم هذا الموظف استقالته. تواصل مع المدير.');
-    return { token: 'mock_token_' + Date.now(), user: { id: user.id, name: user.name, role: user.role, email: user.email } };
+    return { token: 'mock_token_' + Date.now(), user: { id: user.id, name: user.name, role: user.role, email: user.email }, must_change_password: !!user.must_change_password };
   },
   async me() { return JSON.parse(sessionStorage.getItem('marble_user') || localStorage.getItem('marble_user') || '{}'); },
 
@@ -335,9 +350,27 @@ const api = {
     sales.forEach(s => { custTotals[s.customer] = (custTotals[s.customer] || 0) + s.total_amount; });
     const topCustomers = Object.entries(custTotals).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total).slice(0, 5);
 
+    // حساب مبيعات الشهر السابق للمقارنة
+    const prevMonth = m === 0 ? 11 : m - 1;
+    const prevYear  = m === 0 ? y - 1 : y;
+    const prevMonthlySales = sales.filter(s => { const d = new Date(s.invoice_date); return d.getMonth() === prevMonth && d.getFullYear() === prevYear; });
+    const prevTotal = prevMonthlySales.reduce((s, i) => s + i.total_amount, 0);
+    const currTotal = monthlySales.reduce((s, i) => s + i.total_amount, 0);
+    const salesGrowth = prevTotal > 0 ? ((currTotal - prevTotal) / prevTotal * 100).toFixed(1) : null;
+
+    // أعلى 5 منتجات مبيعاً
+    const productSales = {};
+    sales.forEach(inv => (inv.items || []).forEach(item => {
+      productSales[item.product] = (productSales[item.product] || 0) + item.qty;
+    }));
+    const topProducts = Object.entries(productSales).map(([name, qty]) => ({ name, qty })).sort((a, b) => b.qty - a.qty).slice(0, 5);
+
+    // المنتجات ذات المخزون المنخفض
+    const lowStockProducts = products.filter(p => p.stock_qty <= p.min_stock);
+
     return {
       kpis: {
-        monthly_sales:       monthlySales.reduce((s, i) => s + i.total_amount, 0),
+        monthly_sales:       currTotal,
         monthly_sales_count: monthlySales.length,
         cash_balance:        85000,
         bank_balance:        320000,
@@ -347,9 +380,12 @@ const api = {
         monthly_purchases:   monthlyPurchases.reduce((s, p) => s + p.total_amount, 0),
         low_stock_count:     products.filter(p => p.stock_qty <= p.min_stock).length,
       },
-      charts:          { monthly_sales: months },
-      top_customers:   topCustomers,
-      recent_invoices: [...sales].sort((a, b) => new Date(b.invoice_date) - new Date(a.invoice_date)).slice(0, 5),
+      charts:            { monthly_sales: months },
+      top_customers:     topCustomers,
+      recent_invoices:   [...sales].sort((a, b) => new Date(b.invoice_date) - new Date(a.invoice_date)).slice(0, 5),
+      sales_growth:      salesGrowth,
+      top_products:      topProducts,
+      low_stock_products: lowStockProducts,
     };
   },
 
@@ -773,6 +809,56 @@ const api = {
     if (params.user_id)     items = items.filter(i => i.user_id     === parseInt(params.user_id));
     if (params.entity_type) items = items.filter(i => i.entity_type === params.entity_type);
     return items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 500);
+  },
+
+  // ===== عروض الأسعار =====
+  async quotations(params = {}) {
+    let items = DB.getAll('quotations');
+    if (params.status) items = items.filter(i => i.status === params.status);
+    if (params.search) { const q = params.search.toLowerCase(); items = items.filter(i => i.quotation_number.toLowerCase().includes(q) || i.customer.toLowerCase().includes(q)); }
+    return { data: items.sort((a, b) => new Date(b.date) - new Date(a.date)) };
+  },
+  async createQuotation(d) {
+    const id  = DB.nextId('quotations');
+    const num = `QUO-${new Date().getFullYear()}-${String(id).padStart(3, '0')}`;
+    const quo = DB.save('quotations', { ...d, id, quotation_number: num, status: d.status || 'draft', created_at: new Date().toISOString() });
+    this.logActivity('create', 'quotation', id, `عرض سعر: ${num} - ${d.customer}`);
+    return quo;
+  },
+  async updateQuotationStatus(id, newStatus) {
+    const q = DB.findById('quotations', id);
+    if (!q) throw new Error('عرض السعر غير موجود');
+    const allowed = ['draft', 'sent', 'accepted', 'rejected', 'invoiced'];
+    if (!allowed.includes(newStatus)) throw new Error('حالة غير صالحة');
+    q.status = newStatus;
+    DB.save('quotations', q);
+    this.logActivity('update', 'quotation', parseInt(id), `تغيير حالة عرض السعر ${q.quotation_number}: ${newStatus}`);
+    return q;
+  },
+  async convertQuotationToInvoice(id) {
+    const q = DB.findById('quotations', id);
+    if (!q) throw new Error('عرض السعر غير موجود');
+    if (q.status === 'invoiced') throw new Error('تم تحويل عرض السعر مسبقاً');
+    const sale = await this.createSale({
+      customer_id:    q.customer_id,
+      customer:       q.customer,
+      invoice_date:   new Date().toISOString().split('T')[0],
+      due_date:       q.valid_until || new Date(Date.now() + 30*86400000).toISOString().split('T')[0],
+      items:          q.items,
+      subtotal:       q.subtotal,
+      tax:            q.tax || 0,
+      total_amount:   q.total_amount,
+      paid_amount:    0,
+      status:         'draft',
+      notes:          `محوّلة من عرض السعر ${q.quotation_number}`,
+      currency:       q.currency || 'EGP',
+      negotiated_price: null,
+    });
+    q.status = 'invoiced';
+    q.invoice_id = sale.id;
+    DB.save('quotations', q);
+    this.logActivity('update', 'quotation', parseInt(id), `تحويل عرض السعر ${q.quotation_number} إلى فاتورة ${sale.invoice_number}`);
+    return sale;
   },
 
   // ===== INVOICE-PAYMENT HELPERS =====
