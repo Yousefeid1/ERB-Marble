@@ -334,5 +334,6 @@ function exportSlabsExcel() {
   const statusLabel = { in_stock: 'في المخزن', sold: 'مباعة', waste: 'هالك' };
   const headers = ['الكود', 'كود البلوك', 'النوع', 'الدرجة', 'العرض (سم)', 'الارتفاع (سم)', 'السماكة (سم)', 'المساحة (م²)', 'الحالة'];
   const rows = slabs.map(s => [s.code, s.block_code, s.type, s.grade, s.width, s.height, s.thickness, s.area_m2, statusLabel[s.status] || s.status]);
-  exportGenericExcel({ sheetName: 'الألواح', headers, rows, filename: `slabs-${new Date().toISOString().split('T')[0]}.xlsx` });
+  const totalArea = slabs.filter(s => s.status === 'in_stock').reduce((sum, s) => sum + s.area_m2, 0);
+  exportGenericExcel({ sheetName: 'الألواح', headers, rows, totalsRow: ['', '', '', '', '', '', 'المتاح (م²)', totalArea, ''], filename: `slabs-${new Date().toISOString().split('T')[0]}.xlsx` });
 }

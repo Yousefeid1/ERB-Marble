@@ -282,8 +282,8 @@ function exportSuppliersPDF() {
 
 function exportSuppliersExcel() {
   const suppliers = window._suppliersListData || [];
-  const headers = ['الاسم', 'الهاتف', 'البريد الإلكتروني', 'العنوان', 'المستحق عليه (EGP)'];
-  const rows = suppliers.map(s => [s.name, s.phone || '-', s.email || '-', s.address || '-', s.balance || 0]);
+  const headers = ['الاسم', 'الهاتف', 'البريد الإلكتروني', 'العنوان', 'المستحق عليه (EGP)', 'تاريخ الإنشاء'];
+  const rows = suppliers.map(s => [s.name, s.phone || '-', s.email || '-', s.address || '-', s.balance || 0, s.created_at || '-']);
   const totalBalance = suppliers.reduce((s, sup) => s + (sup.balance || 0), 0);
-  exportGenericExcel({ sheetName: 'الموردون', headers, rows, totalsRow: ['الإجمالي', '', '', '', totalBalance], filename: `suppliers-${new Date().toISOString().split('T')[0]}.xlsx` });
+  exportGenericExcel({ sheetName: 'الموردون', headers, rows, totalsRow: ['الإجمالي', '', '', '', totalBalance, ''], filename: `suppliers-${new Date().toISOString().split('T')[0]}.xlsx` });
 }
