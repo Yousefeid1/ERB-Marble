@@ -2,6 +2,8 @@
 
 A web-based **Enterprise Resource Planning (ERP)** system tailored for marble and granite businesses. Built as a single-page application (SPA) with a clean RTL Arabic interface.
 
+🌐 **Live Demo:** [https://yousefeid1.github.io](https://yousefeid1.github.io)
+
 ---
 
 ## Features
@@ -67,6 +69,7 @@ A web-based **Enterprise Resource Planning (ERP)** system tailored for marble an
 ├── index.html          # Main SPA shell with sidebar navigation & login screen
 ├── api.js              # Root-level API client (legacy reference)
 ├── app.js              # Root-level app controller (legacy reference)
+├── dashboard.js        # Root-level dashboard controller (legacy reference)
 ├── style.css           # Root-level stylesheet (legacy reference)
 ├── css/
 │   └── style.css       # Main stylesheet
