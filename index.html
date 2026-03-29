@@ -114,6 +114,9 @@
       <a class="nav-item" onclick="showPage('expenses')" data-page="expenses">
         <span class="nav-icon">◪</span><span class="nav-label">المصروفات</span>
       </a>
+      <a class="nav-item" onclick="showPage('cost-centers')" data-page="cost-centers">
+        <span class="nav-icon">🏷️</span><span class="nav-label">مراكز التكلفة</span>
+      </a>
       
       <div class="nav-section-label">التقارير المالية</div>
       <a class="nav-item" onclick="showPage('report-pl')" data-page="report-pl">
@@ -215,6 +218,8 @@
 <script src="js/pages/crud-pages.js"></script>
 <script src="js/pages/employees.js"></script>
 <script src="js/pages/logistics.js"></script>
+<script src="js/pages/manufacturing.js"></script>
+<script src="js/pages/cost-centers.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

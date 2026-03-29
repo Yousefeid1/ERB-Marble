@@ -282,6 +282,7 @@ const pageTitles = {
   'shipments':        'الشحن والتوصيل',
   'shipment-report':  'تقارير التصدير',
   'quotations':       'عروض الأسعار',
+  'cost-centers':     'مراكز التكلفة الفعلية',
 };
 
 // Track current page for real-time refresh
@@ -341,6 +342,7 @@ function showPage(pageName) {
     'shipments':        renderShipments,
     'shipment-report':  renderShipmentReport,
     'quotations':       renderQuotations,
+    'cost-centers':     renderCostCenters,
   };
 
   if (renders[pageName]) renders[pageName]();
@@ -367,6 +369,7 @@ function _scheduleRefresh() {
         'activity-log': renderActivityLog, 'warehouses': renderWarehouses,
         'shipments': renderShipments, 'shipment-report': renderShipmentReport,
         'quotations': renderQuotations,
+        'cost-centers': renderCostCenters,
       };
       if (renders[_currentPage]) renders[_currentPage]();
       loadNotifications();
