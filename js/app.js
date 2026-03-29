@@ -4,13 +4,48 @@
 
 let currentUser = null;
 
+// ===== حد محاولات تسجيل الدخول =====
+const LOGIN_RATE_LIMIT = {
+  max: 5,
+  window: 15 * 60 * 1000,
+  key: 'marble_login_attempts',
+  checkAndRecord() {
+    const now = Date.now();
+    const data = JSON.parse(sessionStorage.getItem(this.key) || '{"attempts":[],"blocked_until":0}');
+    if (data.blocked_until > now) {
+      const mins = Math.ceil((data.blocked_until - now) / 60000);
+      throw new Error(`تم تجميد الحساب مؤقتاً. حاول مرة أخرى بعد ${mins} دقيقة`);
+    }
+    data.attempts = data.attempts.filter(t => now - t < this.window);
+    if (data.attempts.length >= this.max) {
+      data.blocked_until = now + this.window;
+      sessionStorage.setItem(this.key, JSON.stringify(data));
+      throw new Error('تم تجميد الحساب مؤقتاً بسبب كثرة المحاولات الفاشلة. حاول بعد 15 دقيقة');
+    }
+    data.attempts.push(now);
+    sessionStorage.setItem(this.key, JSON.stringify(data));
+  },
+  reset() { sessionStorage.removeItem(this.key); }
+};
+
+// تنظيف المدخلات من الأكواد الخبيثة
+function sanitize(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/[<>]/g, '').trim();
+}
+
+// نافذة تأكيد قبل الحذف
+function confirmDelete(message = 'هل أنت متأكد من الحذف؟ لا يمكن التراجع عن هذه العملية.') {
+  return confirm(message);
+}
+
 // ===== ROLE-BASED ACCESS =====
 const ROLE_PAGES = {
   'مدير عام':        null, // null = all pages visible
   'مدير':            null,
   'محاسب':           ['dashboard', 'journal', 'accounts', 'trial-balance', 'payments', 'expenses', 'report-pl', 'report-bs', 'report-waste', 'report-inventory', 'settings', 'notifications'],
-  'موظف مبيعات':    ['dashboard', 'sales', 'customers', 'aging', 'notifications'],
-  'مدير مبيعات':    ['dashboard', 'sales', 'customers', 'aging', 'payments', 'report-pl', 'notifications'],
+  'موظف مبيعات':    ['dashboard', 'sales', 'customers', 'aging', 'quotations', 'notifications'],
+  'مدير مبيعات':    ['dashboard', 'sales', 'customers', 'aging', 'quotations', 'payments', 'report-pl', 'notifications'],
   'موظف مشتريات':  ['dashboard', 'purchases', 'suppliers', 'payments', 'notifications'],
   'موظف تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'products', 'notifications'],
   'مدير تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'products', 'report-waste', 'report-inventory', 'notifications'],
@@ -22,13 +57,15 @@ const ROLE_PAGES = {
 
 // ===== AUTH =====
 async function doLogin() {
-  const email    = document.getElementById('login-email').value.trim();
+  const email    = sanitize(document.getElementById('login-email').value.trim());
   const password = document.getElementById('login-password').value;
   const errEl    = document.getElementById('login-error');
   errEl.textContent = '';
 
   try {
+    LOGIN_RATE_LIMIT.checkAndRecord();
     const data = await api.login(email, password);
+    LOGIN_RATE_LIMIT.reset();
     api.setToken(data.token);
     currentUser = data.user;
     sessionStorage.setItem('marble_user', JSON.stringify(data.user));
@@ -36,6 +73,9 @@ async function doLogin() {
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
     initApp();
+    if (data.must_change_password) {
+      setTimeout(() => showForceChangePassword(), 500);
+    }
   } catch (e) {
     errEl.textContent = e.message || 'بيانات الدخول خاطئة';
   }
@@ -135,6 +175,16 @@ function filterSidebarByRole() {
 }
 
 
+// تبديل وضع النهار/الليل
+function toggleDarkMode() {
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const newTheme = isDark ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', newTheme === 'dark' ? '' : 'light');
+  localStorage.setItem('marble_theme', newTheme);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = newTheme === 'dark' ? '🌙' : '☀️';
+}
+
 const pageTitles = {
   'dashboard':        'لوحة التحكم',
   'journal':          'القيود المحاسبية',
@@ -161,6 +211,7 @@ const pageTitles = {
   'warehouses':       'إدارة المستودعات',
   'shipments':        'الشحن والتوصيل',
   'shipment-report':  'تقارير التصدير',
+  'quotations':       'عروض الأسعار',
 };
 
 // Track current page for real-time refresh
@@ -183,6 +234,10 @@ function showPage(pageName) {
 
   // Update title
   document.getElementById('page-title').textContent = pageTitles[pageName] || pageName;
+
+  // تحديث breadcrumb
+  const bc = document.getElementById('breadcrumb-current');
+  if (bc) bc.textContent = pageTitles[pageName] || pageName;
 
   // Render page
   const content = document.getElementById('page-content');
@@ -215,6 +270,7 @@ function showPage(pageName) {
     'warehouses':       renderWarehouses,
     'shipments':        renderShipments,
     'shipment-report':  renderShipmentReport,
+    'quotations':       renderQuotations,
   };
 
   if (renders[pageName]) renders[pageName]();
@@ -240,6 +296,7 @@ function _scheduleRefresh() {
         'notifications': renderNotifications, 'employees': renderEmployees,
         'activity-log': renderActivityLog, 'warehouses': renderWarehouses,
         'shipments': renderShipments, 'shipment-report': renderShipmentReport,
+        'quotations': renderQuotations,
       };
       if (renders[_currentPage]) renders[_currentPage]();
       loadNotifications();
@@ -249,7 +306,15 @@ function _scheduleRefresh() {
 
 // ===== SIDEBAR =====
 function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('collapsed');
+  const sidebar = document.getElementById('sidebar');
+  const isMobile = window.innerWidth <= 768;
+  if (isMobile) {
+    sidebar.classList.toggle('mobile-open');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (overlay) overlay.classList.toggle('active', sidebar.classList.contains('mobile-open'));
+  } else {
+    sidebar.classList.toggle('collapsed');
+  }
 }
 
 // ===== MODAL =====
@@ -326,6 +391,14 @@ function generateBarcodeHTML(code) {
 
 // ===== STARTUP =====
 window.addEventListener('load', () => {
+  // تحميل الثيم المحفوظ
+  const savedTheme = localStorage.getItem('marble_theme');
+  if (savedTheme === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    const btn = document.getElementById('theme-toggle');
+    if (btn) btn.textContent = '☀️';
+  }
+
   const token = sessionStorage.getItem('marble_token') || localStorage.getItem('marble_token');
   const user  = sessionStorage.getItem('marble_user')  || localStorage.getItem('marble_user');
   if (token && user) {
@@ -352,12 +425,62 @@ window.addEventListener('load', () => {
   } catch (_) {}
 });
 
-// Enter key on login
+// ===== اختصارات لوحة المفاتيح =====
 document.addEventListener('keydown', (e) => {
+  // تسجيل الدخول بـ Enter
   if (e.key === 'Enter' && !document.getElementById('login-screen').classList.contains('hidden')) {
     doLogin();
+    return;
+  }
+
+  // لا تفعّل الاختصارات داخل حقول الإدخال
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+    if (e.key === 'Escape') closeModal();
+    return;
+  }
+
+  if (document.getElementById('app').classList.contains('hidden')) return;
+
+  // Escape: إغلاق Modal
+  if (e.key === 'Escape') { closeModal(); return; }
+
+  // Ctrl+F: بحث
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    e.preventDefault();
+    const searchInput = document.querySelector('.filters-bar input[type="text"]');
+    if (searchInput) { searchInput.focus(); searchInput.select(); }
+    return;
+  }
+
+  // Ctrl+N: جديد
+  if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+    e.preventDefault();
+    const newBtns = document.querySelectorAll('.page-header .btn-primary');
+    if (newBtns.length) newBtns[newBtns.length - 1].click();
+    return;
+  }
+
+  // Ctrl+S: حفظ
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    const modal = document.getElementById('global-modal');
+    if (modal.classList.contains('open')) {
+      const saveBtn = modal.querySelector('.btn-primary');
+      if (saveBtn) saveBtn.click();
+    }
+    return;
   }
 });
+
+// بناء skeleton loader للجداول
+function tableSkeletonHTML(rows = 5, cols = 4) {
+  const skeletonRows = Array(rows).fill(0).map(() => `
+    <div class="skeleton-row">
+      ${Array(cols).fill('<div class="skeleton"></div>').join('')}
+    </div>
+  `).join('');
+  return `<div class="card" style="padding:0">${skeletonRows}</div>`;
+}
 
 // ===== ROLE HELPERS =====
 function isManager() {
@@ -522,4 +645,49 @@ function _updateTableWithPagination(tbodyId, rowsFn, data, page, renderFn) {
       if (tmp.firstElementChild) card.appendChild(tmp.firstElementChild);
     }
   }
+}
+
+// ===== إجبار تغيير كلمة المرور =====
+function showForceChangePassword() {
+  openModal('يجب تغيير كلمة المرور', `
+    <p style="color:var(--warning);margin-bottom:16px">لأسباب أمنية، يجب عليك تغيير كلمة المرور قبل المتابعة.</p>
+    <div class="form-grid">
+      <div class="form-group form-full">
+        <label>كلمة المرور الجديدة *</label>
+        <input type="password" id="fcp-new" placeholder="8 أحرف على الأقل">
+      </div>
+      <div class="form-group form-full">
+        <label>تأكيد كلمة المرور *</label>
+        <input type="password" id="fcp-confirm" placeholder="أعد كتابة كلمة المرور">
+      </div>
+    </div>
+    <div id="fcp-error" style="color:var(--danger);font-size:13px;margin:8px 0"></div>
+    <div style="margin-top:16px;text-align:left">
+      <button class="btn btn-primary" onclick="submitForceChangePassword()">تغيير كلمة المرور</button>
+    </div>
+  `);
+  // منع إغلاق المودال بالضغط على overlay
+  document.getElementById('modal-overlay').onclick = null;
+}
+
+async function submitForceChangePassword() {
+  const newPass     = document.getElementById('fcp-new').value;
+  const confirmPass = document.getElementById('fcp-confirm').value;
+  const errEl       = document.getElementById('fcp-error');
+  errEl.textContent = '';
+  if (newPass.length < 8) { errEl.textContent = 'كلمة المرور يجب أن تكون 8 أحرف على الأقل'; return; }
+  if (newPass !== confirmPass) { errEl.textContent = 'كلمتا المرور غير متطابقتين'; return; }
+  try {
+    const userId = currentUser.id;
+    const users = DB.getAll('users');
+    const user = users.find(u => u.id === userId);
+    if (user) {
+      user.password = newPass;
+      user.must_change_password = false;
+      DB.save('users', user);
+    }
+    toast('تم تغيير كلمة المرور بنجاح', 'success');
+    document.getElementById('modal-overlay').onclick = closeModal;
+    closeModal();
+  } catch(e) { errEl.textContent = e.message; }
 }

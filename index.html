@@ -28,11 +28,11 @@
     <div class="login-form">
       <div class="form-group">
         <label>البريد الإلكتروني</label>
-        <input type="email" id="login-email" placeholder="admin@marble.com" value="admin@marble.com">
+        <input type="email" id="login-email" placeholder="البريد الإلكتروني">
       </div>
       <div class="form-group">
         <label>كلمة المرور</label>
-        <input type="password" id="login-password" placeholder="••••••••" value="admin123">
+        <input type="password" id="login-password" placeholder="كلمة المرور">
       </div>
       <div id="login-error" class="login-error"></div>
       <button class="btn-login" onclick="doLogin()">تسجيل الدخول</button>
@@ -80,6 +80,9 @@
       </a>
       <a class="nav-item" onclick="showPage('aging')" data-page="aging">
         <span class="nav-icon">◔</span><span class="nav-label">تقرير التقادم</span>
+      </a>
+      <a class="nav-item" onclick="showPage('quotations')" data-page="quotations">
+        <span class="nav-icon">📝</span><span class="nav-label">عروض الأسعار</span>
       </a>
       
       <div class="nav-section-label">المشتريات</div>
@@ -161,6 +164,7 @@
         <h2 class="page-title" id="page-title">لوحة التحكم</h2>
       </div>
       <div class="top-bar-right">
+        <button class="btn-icon" id="theme-toggle" onclick="toggleDarkMode()" title="تبديل المظهر">🌙</button>
         <div class="notification-btn" onclick="showPage('notifications')">
           🔔 <span class="notif-badge" id="notif-count">0</span>
         </div>
@@ -171,12 +175,20 @@
       </div>
     </header>
     
+    <div class="breadcrumb" id="breadcrumb">
+      <span>الرئيسية</span>
+      <span class="breadcrumb-sep">›</span>
+      <span id="breadcrumb-current">لوحة التحكم</span>
+    </div>
     <div class="page-content" id="page-content">
       <!-- Pages loaded here dynamically -->
     </div>
   </main>
   
 </div>
+
+<!-- SIDEBAR OVERLAY (mobile) -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
 <!-- GLOBAL MODAL -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeModal()"></div>
@@ -203,5 +215,12 @@
 <script src="js/pages/crud-pages.js"></script>
 <script src="js/pages/employees.js"></script>
 <script src="js/pages/logistics.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    });
+  }
+</script>
 </body>
 </html>

@@ -1,159 +1,265 @@
 # نظام ERP - الرخام والجرانيت
 
-A web-based **Enterprise Resource Planning (ERP)** system tailored for marble and granite businesses. Built as a single-page application (SPA) with a clean RTL Arabic interface.
+<div align="center">
 
-🌐 **Live Demo:** [https://yousefeid1.github.io](https://yousefeid1.github.io)
+**نظام تخطيط موارد المؤسسة** — مصمم خصيصاً لشركات الرخام والجرانيت
 
----
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-يعمل%20الآن-brightgreen?style=for-the-badge)](https://yousefeid1.github.io)
+[![Language](https://img.shields.io/badge/Language-Arabic%20RTL-blue?style=for-the-badge)](https://yousefeid1.github.io)
+[![Storage](https://img.shields.io/badge/Storage-localStorage-orange?style=for-the-badge)](#)
 
-## Features
-
-### 📊 Accounting
-- **Journal Entries** – Create and manage double-entry accounting records
-- **Chart of Accounts** – Hierarchical account tree management
-- **Trial Balance** – Real-time trial balance reports
-
-### 💰 Sales
-- **Sales Invoices** – Create and track customer invoices with status management (draft → sent → paid)
-- **Customer Management** – Full customer profiles and ledger
-- **Aging Report** – Receivables aging analysis
-
-### 🛒 Purchases
-- **Purchase Invoices** – Record supplier invoices and inventory receipts
-- **Supplier Management** – Supplier profiles and payables tracking
-- **Payments & Receipts** – Log all payments and collections
-
-### 🪨 Marble & Production
-- **Raw Blocks** – Track incoming raw marble/granite blocks
-- **Cutting Operations** – Manage cutting batches and yield
-- **Slabs** – Inventory of processed slabs
-- **Products** – Finished product catalog with pricing
-
-### 💸 Costs
-- **Expenses** – Record and categorize operational expenses
-
-### 📈 Financial Reports
-- **Profit & Loss** – Income statement with date range filters
-- **Balance Sheet** – Full balance sheet snapshot
-- **Waste Report** – Waste/scrap tracking and analysis
-- **Inventory Report** – Current stock valuation
-
-### 🚛 Logistics
-- **Warehouse Management** – Multiple warehouse support
-- **Shipments** – Delivery and shipping tracking
-
-### ⚙️ Settings & Administration
-- **Employee Management** – User and staff records
-- **Activity Log** – Full audit trail of system actions
-- **System Settings** – Company name, currency, and preferences
-- **Notifications** – Real-time in-app alerts
+</div>
 
 ---
 
-## Tech Stack
+## 📋 نظرة عامة
 
-| Layer      | Technology                          |
-|------------|-------------------------------------|
-| Frontend   | HTML5, CSS3, Vanilla JavaScript (ES6+) |
-| Charts     | [Chart.js 4.4.1](https://www.chartjs.org/) |
-| Fonts      | Google Fonts – Cairo & Tajawal      |
-| Direction  | RTL (Right-to-Left) Arabic UI       |
-| Backend    | REST API (`/api` endpoints)         |
-| Auth       | Bearer token (JWT stored in `localStorage`) |
+نظام **ERP** متكامل يعمل بالكامل داخل المتصفح دون الحاجة لأي خادم خلفي (backend). يستخدم `localStorage` كقاعدة بيانات مدمجة ويوفر واجهة عربية كاملة من اليمين لليسار (RTL)، مع دعم الوضع الليلي والنهاري، ولوحات تحكم تفاعلية بالرسوم البيانية.
+
+🌐 **الموقع المباشر:** [https://yousefeid1.github.io](https://yousefeid1.github.io)
 
 ---
 
-## Project Structure
+## ✨ المميزات الرئيسية
+
+### 📊 لوحة التحكم (Dashboard)
+- **مؤشرات الأداء الرئيسية (KPIs):** إجمالي المبيعات، المشتريات، المتحصلات، الأرباح — مع نسبة النمو الشهري ▲/▼
+- **الرسوم البيانية التفاعلية:** مبيعات شهرية (خط) وتوزيع المصروفات (دائري) باستخدام Chart.js
+- **أكثر المنتجات مبيعاً:** قائمة مصنفة بشريط تقدم للوحدات المبيعة
+- **تنبيهات المخزون المنخفض:** قائمة فورية للمنتجات التي تقل مخزونها عن الحد الأدنى
+- **آخر الفواتير:** عرض فوري لأحدث 5 فواتير مع الحالة
+
+### 📒 المحاسبة
+- **قيود اليومية:** إدخال قيود محاسبية بالقيد المزدوج مع التحقق من التوازن التلقائي (مدين = دائن)
+- **دليل الحسابات:** شجرة هرمية من الحسابات (أصول / خصوم / حقوق ملكية / إيرادات / مصروفات)
+- **ميزان المراجعة:** تقرير فوري بأرصدة جميع الحسابات
+
+### 💰 المبيعات
+- **فواتير المبيعات:** إنشاء فواتير بنود متعددة مع حساب الضريبة، بند متعدد العملات، دورة حالة (مسودة → مرسلة → مدفوعة → ملغية)، طباعة PDF بالعربي
+- **إدارة العملاء:** ملفات كاملة للعملاء (اسم، تليفون، بريد، عنوان)
+- **تقرير الأعمار (Aging):** تحليل الذمم المدينة حسب الفترات (30 / 60 / 90 / +90 يوم)
+- **عروض الأسعار (Quotations):** إنشاء عروض أسعار بنود ديناميكية، دورة حالة (مسودة → مرسلة → مقبولة / مرفوضة)، تحويل تلقائي لفاتورة مبيعات، طباعة PDF
+
+### 🛒 المشتريات
+- **فواتير المشتريات:** تسجيل فواتير الموردين مع تحديث المخزون التلقائي
+- **إدارة الموردين:** ملفات الموردين، إجمالي الفواتير، دفتر المستحقات
+
+### 💸 المدفوعات والمتحصلات
+- تسجيل كل المدفوعات للموردين والمتحصلات من العملاء مع ربطها بالفواتير
+- دعم طرق دفع متعددة (نقدي، تحويل، شيك)
+
+### 🪨 الإنتاج والتصنيع
+- **الكتل الخام (Blocks):** تسجيل الكتل الواردة (نوع الحجر، المصدر، الوزن، التكلفة)
+- **عمليات القطع (Cutting):** تسجيل دفعات القطع مع الإنتاجية والهالك والمشغّل
+- **الألواح (Slabs):** مخزون الألواح المصنعة الناتجة عن القطع
+- **المنتجات:** كتالوج المنتجات النهائية مع الأسعار والمخزون والحد الأدنى
+
+### 💳 المصروفات
+- تسجيل وتصنيف مصروفات التشغيل (رواتب، صيانة، شحن، إيجار، إلخ)
+
+### 📈 التقارير المالية
+| التقرير | الوصف |
+|---------|-------|
+| **الأرباح والخسائر (P&L)** | قائمة الدخل مع فلتر التاريخ، تصدير PDF/Excel |
+| **الميزانية العمومية (B/S)** | لقطة كاملة للمركز المالي |
+| **تقرير الهالك** | تتبع وتحليل الهالك من عمليات القطع |
+| **تقرير المخزون** | تقييم المخزون الحالي بالتكلفة والقيمة السوقية |
+
+### 🚛 اللوجستيك
+- **إدارة المستودعات:** دعم مستودعات متعددة (اسم، موقع، مسؤول، سعة)
+- **الشحنات:** تسجيل شحنات التسليم مع السائق، المركبة، بوليصة الشحن، دورة الحالة
+- **تقرير الشحنات:** تقرير مفصّل مع تنبيهات الشحنات المتأخرة
+
+### 👥 الإدارة والموارد البشرية
+- **إدارة الموظفين:** بيانات الموظف الكاملة (الرقم القومي، الراتب، القسم، الدور الوظيفي، الحالة)، تعيين صلاحيات النظام، إعادة تعيين كلمة المرور
+- **سجل النشاط (Activity Log):** سجل تدقيق كامل لكل العمليات (من قام بها، متى، على أي سجل)
+- **الإعدادات:** اسم الشركة، العملة الافتراضية، نسبة الضريبة، سعر الصرف
+- **الإشعارات:** تنبيهات داخل النظام مع عداد غير المقروء، وتنبيه تلقائي عند الشحنات المتأخرة
+
+---
+
+## 🖥️ واجهة المستخدم
+
+| الميزة | التفاصيل |
+|--------|----------|
+| **الاتجاه** | RTL كامل (عربي من اليمين لليسار) |
+| **الوضع الليلي / النهاري** | تبديل بزر واحد، محفوظ في `localStorage` |
+| **Skeleton Loaders** | شاشات تحميل أنيقة قبل ظهور البيانات |
+| **Breadcrumb** | مسار تنقل واضح في أعلى كل صفحة |
+| **اختصارات لوحة المفاتيح** | `Ctrl+F` بحث · `Ctrl+N` جديد · `Ctrl+S` حفظ |
+| **تصدير PDF** | طباعة نافذة مخصصة بخط Cairo للعربي |
+| **تصدير Excel** | تصدير الجداول بصيغة `.xlsx` عبر SheetJS |
+| **التصميم المتجاوب** | يعمل على الشاشات المختلفة |
+
+---
+
+## 🔐 الأمان والصلاحيات
+
+### تحديد معدل تسجيل الدخول (Rate Limiting)
+محاولات تسجيل الدخول محدودة بـ **5 محاولات** قبل الإيقاف المؤقت.
+
+### تعقيم المدخلات (XSS Sanitization)
+جميع المدخلات النصية تمر عبر دالة `sanitize()` قبل المعالجة.
+
+### الصلاحيات (RBAC)
+
+| الدور | الصفحات المتاحة |
+|-------|----------------|
+| **مدير عام / مدير** | جميع الصفحات |
+| **محاسب** | لوحة التحكم، القيود، الحسابات، ميزان المراجعة، المدفوعات، المصروفات، التقارير المالية، الإعدادات |
+| **موظف مبيعات** | لوحة التحكم، المبيعات، العملاء، الأعمار، عروض الأسعار |
+| **مدير مبيعات** | لوحة التحكم، المبيعات، العملاء، الأعمار، عروض الأسعار، المدفوعات، تقرير P&L |
+| **موظف مشتريات** | لوحة التحكم، المشتريات، الموردين، المدفوعات |
+| **موظف تصنيع** | لوحة التحكم، الكتل، القطع، الألواح، المنتجات |
+| **مدير تصنيع** | لوحة التحكم، الكتل، القطع، الألواح، المنتجات، تقرير الهالك، تقرير المخزون |
+| **مشرف تصنيع** | لوحة التحكم، الكتل، القطع، الألواح، المنتجات |
+| **موظف لوجستيك** | لوحة التحكم، المستودعات، الشحنات، تقرير الشحنات |
+| **مدير قسم** | لوحة التحكم، الموظفين، سجل النشاط، المبيعات، العملاء، تقرير P&L |
+| **موظف عادي** | لوحة التحكم والإشعارات فقط |
+
+---
+
+## 🛠️ المكدس التقني
+
+| الطبقة | التقنية |
+|--------|---------|
+| **الواجهة الأمامية** | HTML5، CSS3، JavaScript ES6+ (Vanilla — بدون frameworks) |
+| **الرسوم البيانية** | [Chart.js 4.4.1](https://www.chartjs.org/) |
+| **تصدير PDF** | طباعة `printWindow` مخصصة بدعم عربي كامل |
+| **تصدير Excel** | [SheetJS (xlsx) 0.18.5](https://sheetjs.com/) |
+| **تصدير PDF (جداول)** | [jsPDF 2.5.1](https://github.com/parallax/jsPDF) |
+| **الخطوط** | Google Fonts — Cairo & Tajawal |
+| **قاعدة البيانات** | `localStorage` (mock DB مدمج في المتصفح) |
+| **المصادقة** | Token بسيط محفوظ في `sessionStorage` |
+| **الاتجاه** | RTL كامل |
+
+> **ملاحظة هامة:** النظام يعمل بالكامل في المتصفح — لا يحتاج أي خادم خلفي (backend). جميع البيانات مخزنة في `localStorage` للمتصفح المستخدم.
+
+---
+
+## 📁 هيكل المشروع
 
 ```
-├── index.html          # Main SPA shell with sidebar navigation & login screen
-├── api.js              # Root-level API client (legacy reference)
-├── app.js              # Root-level app controller (legacy reference)
-├── dashboard.js        # Root-level dashboard controller (legacy reference)
-├── style.css           # Root-level stylesheet (legacy reference)
+Yousefeid1.github.io/
+├── index.html              # هيكل SPA: شاشة الدخول + الشريط الجانبي + حاوية الصفحات
 ├── css/
-│   └── style.css       # Main stylesheet
+│   └── style.css           # جميع تنسيقات النظام (متغيرات CSS، dark/light، RTL)
 └── js/
-    ├── api.js          # API client (all REST calls)
-    ├── app.js          # App bootstrap, routing, auth, helpers
+    ├── api.js              # قاعدة البيانات (localStorage) + Mock API Client + Seed Data
+    ├── app.js              # Bootstrap، التوجيه (routing)، المصادقة، المساعدات، RBAC
     └── pages/
-        ├── dashboard.js    # Dashboard widgets & KPIs
-        ├── sales.js        # Sales invoices page
-        ├── purchases.js    # Purchases page
-        ├── payments.js     # Payments & receipts page
-        ├── cutting.js      # Cutting operations page
-        ├── journal.js      # Accounting journal page
-        ├── reports.js      # Financial reports pages
-        ├── crud-pages.js   # Generic CRUD pages (customers, suppliers, blocks, slabs, products, etc.)
-        ├── employees.js    # Employee management page
-        └── logistics.js    # Warehouse & shipments page
+        ├── dashboard.js    # لوحة التحكم: KPIs، الرسوم البيانية، أعلى المنتجات، تنبيهات المخزون
+        ├── sales.js        # المبيعات + العملاء + الأعمار + عروض الأسعار
+        ├── purchases.js    # المشتريات + الموردين
+        ├── payments.js     # المدفوعات والمتحصلات
+        ├── cutting.js      # الكتل + عمليات القطع + الألواح
+        ├── journal.js      # قيود اليومية + دليل الحسابات + ميزان المراجعة
+        ├── reports.js      # تقارير P&L + الميزانية + الهالك + المخزون
+        ├── crud-pages.js   # المنتجات + المشاريع + المصروفات + الإعدادات + الإشعارات
+        ├── employees.js    # الموظفين + سجل النشاط
+        └── logistics.js    # المستودعات + الشحنات + تقرير الشحنات
 ```
 
 ---
 
-## Getting Started
+## 🚀 تشغيل النظام محلياً
 
-### Prerequisites
-- A web server capable of serving static files and routing `/api/*` requests to your backend.
+### المتطلبات
+- متصفح حديث (Chrome / Firefox / Edge / Safari)
+- أي خادم ملفات ثابتة بسيط (اختياري — يمكن فتح `index.html` مباشرة)
 
-### Running Locally
+### الخطوات
 
-1. **Clone the repository**
+1. **استنسخ المستودع**
    ```bash
    git clone https://github.com/Yousefeid1/Yousefeid1.github.io.git
    cd Yousefeid1.github.io
    ```
 
-2. **Serve the frontend**  
-   You can use any static file server, for example:
+2. **شغّل خادم ملفات بسيط** (اختياري للتطوير المحلي)
    ```bash
+   # باستخدام Node.js
    npx serve .
-   ```
-   Or with Python:
-   ```bash
+
+   # أو باستخدام Python
    python3 -m http.server 8080
    ```
 
-3. **Configure the backend API**  
-   The frontend expects a REST API at `/api`. Point your server or proxy to your backend, then open `http://localhost:8080` in your browser.
+3. **افتح المتصفح** على `http://localhost:8080`  
+   أو افتح `index.html` مباشرة بالنقر المزدوج عليه.
 
-### Default Login Credentials
-| Field    | Value               |
-|----------|---------------------|
-| Email    | `admin@marble.com`  |
-| Password | `admin123`          |
-
-> **Note:** Change these credentials in production.
+> لا يوجد `npm install` أو `build step` — النظام يعمل مباشرة!
 
 ---
 
-## API Overview
+## 🔑 بيانات الدخول الافتراضية
 
-All API calls are made relative to `/api`. The client (`js/api.js`) handles authentication via a Bearer token stored in `localStorage`.
+### حساب المدير العام
+| الحقل | القيمة |
+|-------|--------|
+| البريد الإلكتروني | `admin@marble.com` |
+| كلمة المرور | `admin123` |
 
-| Module       | Endpoints                                      |
-|--------------|------------------------------------------------|
-| Auth         | `POST /auth/login`, `GET /auth/me`             |
-| Dashboard    | `GET /dashboard`                               |
-| Journal      | `GET/POST /journal`, `GET /journal/:id`        |
-| Accounts     | `GET/POST /accounts`                           |
-| Sales        | `GET/POST /sales`, `POST /sales/:id/cancel`    |
-| Purchases    | `GET/POST /purchases`                          |
-| Payments     | `GET/POST /payments`                           |
-| Expenses     | `GET/POST /expenses`                           |
-| Customers    | `GET/POST /customers`, `PUT /customers/:id`    |
-| Suppliers    | `GET/POST /suppliers`                          |
-| Products     | `GET/POST /products`, `PUT /products/:id`      |
-| Blocks       | `GET/POST /blocks`                             |
-| Slabs        | `GET /slabs`                                   |
-| Cutting      | `GET/POST /cutting`, `GET /cutting/:id`        |
-| Projects     | `GET/POST /projects`                           |
-| Reports      | `GET /reports/profit-loss`, `/balance-sheet`, `/waste`, `/inventory` |
-| Settings     | `GET/PUT /settings`                            |
-| Notifications| `GET /notifications`                           |
+### حسابات تجريبية لكل الأدوار
+| الدور | البريد الإلكتروني | كلمة المرور |
+|-------|------------------|-------------|
+| محاسب | `accountant@marble.com` | `acc123` |
+| موظف مبيعات | `sales@marble.com` | `sales123` |
+| موظف مشتريات | `purchase@marble.com` | `pur123` |
+| موظف تصنيع | `production@marble.com` | `prod123` |
+| مدير تصنيع | `prodmgr@marble.com` | `prodmgr123` |
+| مشرف تصنيع | `supervisor@marble.com` | `sup123` |
+| موظف لوجستيك | `logistics@marble.com` | `log123` |
+| مدير قسم | `deptmgr@marble.com` | `dept123` |
+| موظف عادي | `employee@marble.com` | `emp123` |
+
+> ⚠️ **تنبيه:** هذه بيانات تجريبية للعرض فقط. كل البيانات مخزنة في `localStorage` المتصفح وتُمسح عند مسح بيانات التصفح.
 
 ---
 
-## License
+## ⌨️ اختصارات لوحة المفاتيح
 
-This project is proprietary. All rights reserved.
+| الاختصار | الوظيفة |
+|----------|---------|
+| `Ctrl + F` | فتح البحث في الصفحة الحالية |
+| `Ctrl + N` | فتح نموذج إضافة سجل جديد |
+| `Ctrl + S` | حفظ النموذج المفتوح |
+
+---
+
+## 📊 نظرة على البيانات الأولية (Seed Data)
+
+عند تشغيل النظام لأول مرة، يتم تهيئة البيانات التالية تلقائياً:
+
+| البيانات | القيم |
+|---------|-------|
+| **الشركة** | شركة الرخام والجرانيت |
+| **العملة** | جنيه مصري (EGP) |
+| **الضريبة** | 14% (ضريبة القيمة المضافة) |
+| **سعر الصرف** | 31 جنيه / دولار |
+| **الموظفون** | 10 حسابات مدمجة (مدير + 9 أدوار) |
+| **دليل الحسابات** | 30+ حساب مبدئي (أصول، خصوم، إيرادات، مصروفات) |
+| **المنتجات** | مجموعة منتجات رخام وجرانيت تجريبية |
+
+---
+
+## 🤝 المساهمة
+
+1. Fork المستودع
+2. أنشئ فرع جديد: `git checkout -b feature/اسم-الميزة`
+3. اعمل التغييرات المطلوبة
+4. افتح Pull Request مع وصف تفصيلي للتغييرات
+
+---
+
+## 📄 الترخيص
+
+هذا المشروع خاص. جميع الحقوق محفوظة.
+
+---
+
+<div align="center">
+
+صُنع بـ ❤️ لصناعة الرخام والجرانيت المصرية
+
+</div>
