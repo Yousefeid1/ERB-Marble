@@ -377,3 +377,433 @@ function exportTrialBalanceExcel() {
   const rows = d.accounts.map(a=>[a.code,a.name,typeMap[a.type]||a.type,['asset','expense'].includes(a.type)?a.balance:0,['liability','equity','revenue'].includes(a.type)?a.balance:0]);
   exportGenericExcel({ sheetName:'ميزان المراجعة', headers, rows, totalsRow:['','','الإجمالي',d.total_debit,d.total_credit], filename:`trial-balance-${new Date().toISOString().split('T')[0]}.xlsx` });
 }
+
+// ============================================================
+// إدارة الشيكات
+// ============================================================
+
+// هيكل بيانات الشيك
+// { id, type:'received'|'issued', checkNo, bank, amount, currency, issueDate, dueDate, partyId, partyName, status:'pending'|'deposited'|'cleared'|'bounced', notes, createdAt }
+
+// الشيكات المستحقة خلال 7 أيام
+function checksDueSoon() {
+  const today = new Date();
+  const in7   = new Date(today.getTime() + 7 * 86400000);
+  return DB.getAll('checks').filter(c => {
+    const due = new Date(c.dueDate);
+    return c.status === 'pending' && due >= today && due <= in7;
+  });
+}
+
+// تحديث حالة الشيك وإنشاء قيد تلقائي عند التحصيل
+async function updateCheckStatus(id, newStatus) {
+  const chk = DB.findById('checks', id);
+  if (!chk) return;
+  chk.status = newStatus;
+  DB.save('checks', chk);
+  // إنشاء قيد محاسبي تلقائي عند التحصيل
+  if (newStatus === 'cleared') {
+    const entryId  = DB.nextId('journal');
+    const entryNum = 'JV-CHK-' + String(entryId).padStart(4,'0');
+    DB.save('journal', {
+      id: entryId,
+      number: entryNum,
+      date: new Date().toISOString().split('T')[0],
+      description: `تحصيل شيك رقم ${chk.checkNo} - ${chk.partyName}`,
+      lines: [
+        { account_name: 'البنك', account_code: '1020', debit: chk.type==='received'?chk.amount:0, credit: chk.type==='issued'?chk.amount:0 },
+        { account_name: 'شيكات برسم التحصيل', account_code: '1025', debit: chk.type==='issued'?chk.amount:0, credit: chk.type==='received'?chk.amount:0 }
+      ]
+    });
+    toast('تم تسجيل قيد التحصيل تلقائياً', 'success');
+  }
+  if (newStatus === 'bounced') toast('تم تسجيل الشيك المرتجع', 'error');
+  renderChecks();
+}
+
+// صفحة إدارة الشيكات
+async function renderChecks() {
+  const content = document.getElementById('page-content');
+  const checks  = DB.getAll('checks');
+  const received = checks.filter(c => c.type === 'received');
+  const issued   = checks.filter(c => c.type === 'issued');
+  const dueSoon  = checksDueSoon();
+
+  content.innerHTML = `
+    <div class="page-header">
+      <div><h2>إدارة الشيكات</h2><p>متابعة الشيكات المستلمة والمصدرة</p></div>
+      <button class="btn btn-primary" onclick="openAddCheckModal()">＋ شيك جديد</button>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-card gold"><div class="kpi-icon">📥</div><div class="kpi-value number">${received.length}</div><div class="kpi-label">شيكات مستلمة</div></div>
+      <div class="kpi-card"><div class="kpi-icon">📤</div><div class="kpi-value number">${issued.length}</div><div class="kpi-label">شيكات مصدرة</div></div>
+      <div class="kpi-card ${dueSoon.length>0?'red':'green'}"><div class="kpi-icon">⏰</div><div class="kpi-value number">${dueSoon.length}</div><div class="kpi-label">تستحق خلال 7 أيام</div></div>
+    </div>
+    <div class="filters-bar">
+      <select id="chk-type" onchange="filterChecks()"><option value="">كل الأنواع</option><option value="received">مستلمة</option><option value="issued">مصدرة</option></select>
+      <select id="chk-status" onchange="filterChecks()"><option value="">كل الحالات</option><option value="pending">معلق</option><option value="deposited">مودع</option><option value="cleared">محصّل</option><option value="bounced">مرتجع</option></select>
+      <input type="text" id="chk-search" placeholder="بحث بالطرف أو رقم الشيك..." oninput="filterChecks()">
+    </div>
+    <div class="card" style="padding:0">
+      <div class="data-table-wrapper">
+        <table>
+          <thead><tr><th>رقم الشيك</th><th>النوع</th><th>البنك</th><th>الطرف</th><th>المبلغ</th><th>تاريخ الإصدار</th><th>تاريخ الاستحقاق</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+          <tbody id="chk-tbody">${renderCheckRows(checks)}</tbody>
+        </table>
+      </div>
+    </div>`;
+  window._checksData = checks;
+}
+
+function renderCheckRows(list) {
+  if (!list.length) return `<tr><td colspan="9"><div class="empty-state" style="padding:40px"><div class="empty-icon">🏦</div><h3>لا توجد شيكات</h3></div></td></tr>`;
+  const statusMap = { pending:'badge-warning', deposited:'badge-info', cleared:'badge-success', bounced:'badge-danger' };
+  const statusLbl = { pending:'معلق', deposited:'مودع', cleared:'محصّل', bounced:'مرتجع' };
+  return list.map(c => `
+    <tr>
+      <td><strong>${c.checkNo||'-'}</strong></td>
+      <td><span class="badge ${c.type==='received'?'badge-success':'badge-info'}">${c.type==='received'?'مستلم':'مصدر'}</span></td>
+      <td>${c.bank||'-'}</td>
+      <td>${c.partyName||'-'}</td>
+      <td class="number">${formatMoney(c.amount, c.currency||'EGP')}</td>
+      <td>${formatDate(c.issueDate)}</td>
+      <td>${formatDate(c.dueDate)}</td>
+      <td><span class="badge ${statusMap[c.status]||'badge-info'}">${statusLbl[c.status]||c.status}</span></td>
+      <td>
+        <select class="btn btn-secondary btn-sm" onchange="updateCheckStatus(${c.id},this.value);this.value=''">
+          <option value="">تغيير الحالة</option>
+          <option value="deposited">إيداع</option>
+          <option value="cleared">تحصيل</option>
+          <option value="bounced">ارتجاع</option>
+        </select>
+        <button class="btn btn-danger btn-sm" onclick="deleteCheck(${c.id})">حذف</button>
+      </td>
+    </tr>`).join('');
+}
+
+function filterChecks() {
+  const type   = document.getElementById('chk-type').value;
+  const status = document.getElementById('chk-status').value;
+  const search = document.getElementById('chk-search').value.toLowerCase();
+  let list = window._checksData || DB.getAll('checks');
+  if (type)   list = list.filter(c => c.type === type);
+  if (status) list = list.filter(c => c.status === status);
+  if (search) list = list.filter(c => (c.partyName||'').toLowerCase().includes(search) || (c.checkNo||'').toLowerCase().includes(search));
+  document.getElementById('chk-tbody').innerHTML = renderCheckRows(list);
+}
+
+function deleteCheck(id) {
+  if (!confirmDelete('حذف هذا الشيك؟')) return;
+  DB.remove('checks', id);
+  renderChecks();
+  toast('تم حذف الشيك', 'success');
+}
+
+function openAddCheckModal() {
+  const customers = DB.getAll('customers');
+  const suppliers = DB.getAll('suppliers');
+  const parties   = [...customers.map(c=>({id:c.id,name:c.name,t:'عميل'})), ...suppliers.map(s=>({id:s.id,name:s.name,t:'مورد'}))];
+  openModal('شيك جديد', `
+    <div class="form-grid">
+      <div class="form-group">
+        <label>النوع</label>
+        <select id="chk-type-inp">
+          <option value="received">مستلم</option>
+          <option value="issued">مصدر</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>رقم الشيك</label>
+        <input type="text" id="chk-no-inp" placeholder="رقم الشيك">
+      </div>
+      <div class="form-group">
+        <label>البنك</label>
+        <input type="text" id="chk-bank-inp" placeholder="اسم البنك">
+      </div>
+      <div class="form-group">
+        <label>الطرف</label>
+        <select id="chk-party-inp">
+          <option value="">اختر الطرف</option>
+          ${parties.map(p=>`<option value="${p.id}|${p.name}">${p.name} (${p.t})</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>المبلغ</label>
+        <input type="number" id="chk-amount-inp" min="0" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>العملة</label>
+        <select id="chk-currency-inp">
+          <option value="EGP">جنيه مصري</option>
+          <option value="USD">دولار</option>
+          <option value="EUR">يورو</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>تاريخ الإصدار</label>
+        <input type="date" id="chk-issue-inp">
+      </div>
+      <div class="form-group">
+        <label>تاريخ الاستحقاق</label>
+        <input type="date" id="chk-due-inp">
+      </div>
+      <div class="form-group" style="grid-column:span 2">
+        <label>ملاحظات</label>
+        <textarea id="chk-notes-inp" rows="2"></textarea>
+      </div>
+    </div>
+    <div style="text-align:left;margin-top:12px">
+      <button class="btn btn-primary" onclick="saveCheck()">💾 حفظ</button>
+    </div>`);
+}
+
+function saveCheck() {
+  const partyRaw = document.getElementById('chk-party-inp').value.split('|');
+  const chk = {
+    id: DB.nextId('checks'),
+    type: document.getElementById('chk-type-inp').value,
+    checkNo: document.getElementById('chk-no-inp').value.trim(),
+    bank: document.getElementById('chk-bank-inp').value.trim(),
+    partyId: parseInt(partyRaw[0])||0,
+    partyName: partyRaw[1]||'',
+    amount: parseFloat(document.getElementById('chk-amount-inp').value)||0,
+    currency: document.getElementById('chk-currency-inp').value,
+    issueDate: document.getElementById('chk-issue-inp').value,
+    dueDate: document.getElementById('chk-due-inp').value,
+    status: 'pending',
+    notes: document.getElementById('chk-notes-inp').value.trim(),
+    createdAt: new Date().toISOString()
+  };
+  if (!chk.checkNo) { toast('أدخل رقم الشيك', 'error'); return; }
+  if (!chk.amount)  { toast('أدخل المبلغ', 'error'); return; }
+  DB.save('checks', chk);
+  closeModal();
+  toast('تم حفظ الشيك بنجاح', 'success');
+  renderChecks();
+}
+
+// ============================================================
+// إغلاق السنة المالية
+// ============================================================
+
+async function renderYearClosing() {
+  const content = document.getElementById('page-content');
+  const closedYears = DB.getAll('closed_years');
+  const currentYear = new Date().getFullYear();
+  content.innerHTML = `
+    <div class="page-header">
+      <div><h2>إغلاق السنة المالية</h2><p>قيود الإغلاق ونقل الأرباح المحتجزة</p></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">إغلاق سنة مالية</span></div>
+      <div class="form-grid" style="padding:16px">
+        <div class="form-group">
+          <label>اختر السنة المالية</label>
+          <select id="year-sel">
+            ${[currentYear-1, currentYear-2, currentYear-3].map(y=>`<option value="${y}">${y}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div style="padding:0 16px 16px">
+        <button class="btn btn-secondary" onclick="previewYearClose()">📊 معاينة الأرصدة</button>
+        <button class="btn btn-danger" style="margin-right:8px" onclick="confirmCloseYear()">🔒 إغلاق السنة</button>
+      </div>
+      <div id="year-preview"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-header"><span class="card-title">السنوات المغلقة</span></div>
+      <div class="data-table-wrapper">
+        <table>
+          <thead><tr><th>السنة</th><th>صافي الربح/الخسارة</th><th>تاريخ الإغلاق</th><th>تم بواسطة</th></tr></thead>
+          <tbody>
+            ${closedYears.length ? closedYears.map(y=>`
+              <tr>
+                <td><strong>${y.year}</strong></td>
+                <td class="number ${y.netProfit>=0?'text-success':'text-danger'}">${formatMoney(y.netProfit)}</td>
+                <td>${formatDate(y.closedAt)}</td>
+                <td>${y.closedBy||'-'}</td>
+              </tr>`).join('') : '<tr><td colspan="4"><div class="empty-state" style="padding:20px"><p>لا توجد سنوات مغلقة</p></div></td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+async function previewYearClose() {
+  const year = parseInt(document.getElementById('year-sel').value);
+  const accounts = DB.getAll('accounts');
+  const revenues  = accounts.filter(a => a.type === 'revenue' && a.balance > 0);
+  const expenses  = accounts.filter(a => a.type === 'expense' && a.balance > 0);
+  const totalRev  = revenues.reduce((s,a)=>s+a.balance,0);
+  const totalExp  = expenses.reduce((s,a)=>s+a.balance,0);
+  const netProfit = totalRev - totalExp;
+  document.getElementById('year-preview').innerHTML = `
+    <div style="padding:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      <div class="kpi-card green"><div class="kpi-icon">📈</div><div class="kpi-value number">${formatMoney(totalRev)}</div><div class="kpi-label">إجمالي الإيرادات</div></div>
+      <div class="kpi-card red"><div class="kpi-icon">📉</div><div class="kpi-value number">${formatMoney(totalExp)}</div><div class="kpi-label">إجمالي المصروفات</div></div>
+      <div class="kpi-card ${netProfit>=0?'gold':'red'}"><div class="kpi-icon">${netProfit>=0?'💰':'🔴'}</div><div class="kpi-value number">${formatMoney(Math.abs(netProfit))}</div><div class="kpi-label">${netProfit>=0?'صافي الربح':'صافي الخسارة'}</div></div>
+    </div>`;
+}
+
+function confirmCloseYear() {
+  const year = parseInt(document.getElementById('year-sel').value);
+  if (!confirm(`هل أنت متأكد من إغلاق السنة المالية ${year}؟ لا يمكن التراجع.`)) return;
+  closeFinancialYear(year);
+}
+
+async function closeFinancialYear(year) {
+  const accounts  = DB.getAll('accounts');
+  const revenues  = accounts.filter(a => a.type === 'revenue' && a.balance > 0);
+  const expenses  = accounts.filter(a => a.type === 'expense' && a.balance > 0);
+  const totalRev  = revenues.reduce((s,a)=>s+a.balance,0);
+  const totalExp  = expenses.reduce((s,a)=>s+a.balance,0);
+  const netProfit = totalRev - totalExp;
+
+  // قيد الإغلاق
+  const lines = [
+    ...revenues.map(a => ({ account_name: a.name, account_code: a.code||'', debit: a.balance, credit: 0 })),
+    ...expenses.map(a => ({ account_name: a.name, account_code: a.code||'', debit: 0, credit: a.balance })),
+    { account_name: 'الأرباح المحتجزة', account_code: '3100', debit: netProfit<0?Math.abs(netProfit):0, credit: netProfit>0?netProfit:0 }
+  ];
+
+  const entryId  = DB.nextId('journal');
+  DB.save('journal', {
+    id: entryId,
+    number: 'JV-CLOSE-' + year,
+    date: `${year}-12-31`,
+    description: `قيد إغلاق السنة المالية ${year}`,
+    lines,
+    locked: true
+  });
+
+  // صفر أرصدة الإيرادات والمصروفات
+  accounts.forEach(a => {
+    if (a.type === 'revenue' || a.type === 'expense') { a.balance = 0; DB.save('accounts', a); }
+  });
+
+  // تحديث الأرباح المحتجزة
+  const retainedAcc = accounts.find(a => a.name === 'الأرباح المحتجزة' || a.code === '3100');
+  if (retainedAcc) { retainedAcc.balance = (retainedAcc.balance||0) + netProfit; DB.save('accounts', retainedAcc); }
+
+  // تسجيل السنة المغلقة
+  DB.save('closed_years', { id: DB.nextId('closed_years'), year, netProfit, closedAt: new Date().toISOString(), closedBy: (window.currentUser||{}).name||'مدير النظام' });
+
+  toast(`تم إغلاق السنة المالية ${year} بنجاح`, 'success');
+  renderYearClosing();
+}
+
+// ============================================================
+// القيود المتكررة
+// ============================================================
+
+// هيكل القيد المتكرر:
+// { id, name, frequency:'monthly'|'quarterly'|'yearly', nextDueDate, lines:[{account_name,account_code,debit,credit}], description, isActive, createdAt }
+
+// فحص القيود المتكررة المستحقة وإنشاؤها تلقائياً
+function checkRecurringEntries() {
+  const today     = new Date();
+  const recurring = DB.getAll('recurring_entries').filter(r => r.isActive && new Date(r.nextDueDate) <= today);
+  recurring.forEach(r => {
+    const id  = DB.nextId('journal');
+    DB.save('journal', {
+      id,
+      number: 'JV-REC-' + String(id).padStart(4,'0'),
+      date: today.toISOString().split('T')[0],
+      description: r.name + ' (قيد متكرر)',
+      lines: r.lines || []
+    });
+    // تحديث تاريخ الاستحقاق التالي
+    const next = new Date(r.nextDueDate);
+    if (r.frequency === 'monthly')   next.setMonth(next.getMonth() + 1);
+    else if (r.frequency === 'quarterly') next.setMonth(next.getMonth() + 3);
+    else if (r.frequency === 'yearly')    next.setFullYear(next.getFullYear() + 1);
+    r.nextDueDate = next.toISOString().split('T')[0];
+    DB.save('recurring_entries', r);
+  });
+  if (recurring.length > 0) toast(`تم إنشاء ${recurring.length} قيد متكرر تلقائياً`, 'success');
+}
+
+async function renderRecurringEntries() {
+  const content = document.getElementById('page-content');
+  const entries = DB.getAll('recurring_entries');
+  content.innerHTML = `
+    <div class="page-header">
+      <div><h2>القيود المتكررة</h2><p>قيود تنشأ تلقائياً بشكل دوري</p></div>
+      <button class="btn btn-primary" onclick="openAddRecurringModal()">＋ قيد متكرر جديد</button>
+    </div>
+    <div class="card" style="padding:0">
+      <div class="data-table-wrapper">
+        <table>
+          <thead><tr><th>الاسم</th><th>التكرار</th><th>تاريخ الاستحقاق التالي</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+          <tbody>
+            ${entries.length ? entries.map(r=>`
+              <tr>
+                <td><strong>${r.name}</strong></td>
+                <td>${{monthly:'شهري',quarterly:'ربع سنوي',yearly:'سنوي'}[r.frequency]||r.frequency}</td>
+                <td>${formatDate(r.nextDueDate)}</td>
+                <td><span class="badge ${r.isActive?'badge-success':'badge-danger'}">${r.isActive?'نشط':'موقوف'}</span></td>
+                <td>
+                  <button class="btn btn-secondary btn-sm" onclick="toggleRecurring(${r.id})">${r.isActive?'إيقاف':'تفعيل'}</button>
+                  <button class="btn btn-danger btn-sm" onclick="deleteRecurring(${r.id})">حذف</button>
+                </td>
+              </tr>`).join('') : '<tr><td colspan="5"><div class="empty-state" style="padding:40px"><div class="empty-icon">🔄</div><h3>لا توجد قيود متكررة</h3></div></td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function toggleRecurring(id) {
+  const r = DB.findById('recurring_entries', id);
+  if (!r) return;
+  r.isActive = !r.isActive;
+  DB.save('recurring_entries', r);
+  toast(r.isActive ? 'تم تفعيل القيد المتكرر' : 'تم إيقاف القيد المتكرر', 'success');
+  renderRecurringEntries();
+}
+
+function deleteRecurring(id) {
+  if (!confirmDelete('حذف هذا القيد المتكرر؟')) return;
+  DB.remove('recurring_entries', id);
+  renderRecurringEntries();
+  toast('تم الحذف', 'success');
+}
+
+function openAddRecurringModal() {
+  openModal('قيد متكرر جديد', `
+    <div class="form-grid">
+      <div class="form-group"><label>الاسم</label><input type="text" id="rec-name" placeholder="مثال: إيجار شهري"></div>
+      <div class="form-group"><label>التكرار</label>
+        <select id="rec-freq"><option value="monthly">شهري</option><option value="quarterly">ربع سنوي</option><option value="yearly">سنوي</option></select>
+      </div>
+      <div class="form-group"><label>تاريخ الاستحقاق الأول</label><input type="date" id="rec-date"></div>
+      <div class="form-group"><label>الوصف</label><input type="text" id="rec-desc" placeholder="وصف القيد"></div>
+    </div>
+    <p style="color:var(--text-muted);font-size:12px;margin:8px 0">ملاحظة: يمكن إضافة سطور القيد لاحقاً من خلال التعديل.</p>
+    <div style="text-align:left;margin-top:12px">
+      <button class="btn btn-primary" onclick="saveRecurringEntry()">💾 حفظ</button>
+    </div>`);
+}
+
+function saveRecurringEntry() {
+  const name = document.getElementById('rec-name').value.trim();
+  const date = document.getElementById('rec-date').value;
+  if (!name) { toast('أدخل اسم القيد', 'error'); return; }
+  if (!date) { toast('حدد تاريخ الاستحقاق', 'error'); return; }
+  DB.save('recurring_entries', {
+    id: DB.nextId('recurring_entries'),
+    name,
+    frequency: document.getElementById('rec-freq').value,
+    nextDueDate: date,
+    description: document.getElementById('rec-desc').value.trim(),
+    lines: [],
+    isActive: true,
+    createdAt: new Date().toISOString()
+  });
+  closeModal();
+  toast('تم حفظ القيد المتكرر', 'success');
+  renderRecurringEntries();
+}
+
+// تشغيل فحص القيود المتكررة عند تحميل الصفحة
+checkRecurringEntries();

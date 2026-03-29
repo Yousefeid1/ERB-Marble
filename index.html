@@ -70,6 +70,15 @@
       <a class="nav-item" onclick="showPage('trial-balance')" data-page="trial-balance">
         <span class="nav-icon">⊜</span><span class="nav-label">ميزان المراجعة</span>
       </a>
+      <a class="nav-item" onclick="showPage('checks')" data-page="checks">
+        <span class="nav-icon">🏦</span><span class="nav-label">إدارة الشيكات</span>
+      </a>
+      <a class="nav-item" onclick="showPage('recurring-entries')" data-page="recurring-entries">
+        <span class="nav-icon">🔄</span><span class="nav-label">القيود المتكررة</span>
+      </a>
+      <a class="nav-item" onclick="showPage('year-closing')" data-page="year-closing">
+        <span class="nav-icon">📅</span><span class="nav-label">إغلاق السنة المالية</span>
+      </a>
       
       <div class="nav-section-label">المبيعات</div>
       <a class="nav-item" onclick="showPage('sales')" data-page="sales">
@@ -80,6 +89,9 @@
       </a>
       <a class="nav-item" onclick="showPage('aging')" data-page="aging">
         <span class="nav-icon">◔</span><span class="nav-label">تقرير التقادم</span>
+      </a>
+      <a class="nav-item" onclick="showPage('crm')" data-page="crm">
+        <span class="nav-icon">🤝</span><span class="nav-label">إدارة علاقات العملاء</span>
       </a>
       <a class="nav-item" onclick="showPage('quotations')" data-page="quotations">
         <span class="nav-icon">📝</span><span class="nav-label">عروض الأسعار</span>
@@ -106,6 +118,12 @@
       <a class="nav-item" onclick="showPage('slabs')" data-page="slabs">
         <span class="nav-icon">▥</span><span class="nav-label">الألواح (Slabs)</span>
       </a>
+      <a class="nav-item" onclick="showPage('manufacturing')" data-page="manufacturing">
+        <span class="nav-icon">⚙️</span><span class="nav-label">مراحل التصنيع</span>
+      </a>
+      <a class="nav-item" onclick="showPage('quality')" data-page="quality">
+        <span class="nav-icon">✦</span><span class="nav-label">إدارة الجودة</span>
+      </a>
       <a class="nav-item" onclick="showPage('products')" data-page="products">
         <span class="nav-icon">▦</span><span class="nav-label">المنتجات</span>
       </a>
@@ -113,6 +131,9 @@
       <div class="nav-section-label">التكاليف</div>
       <a class="nav-item" onclick="showPage('expenses')" data-page="expenses">
         <span class="nav-icon">◪</span><span class="nav-label">المصروفات</span>
+      </a>
+      <a class="nav-item" onclick="showPage('cost-centers')" data-page="cost-centers">
+        <span class="nav-icon">🏷️</span><span class="nav-label">مراكز التكلفة</span>
       </a>
       
       <div class="nav-section-label">التقارير المالية</div>
@@ -138,6 +159,9 @@
       </a>
       <a class="nav-item" onclick="showPage('shipment-report')" data-page="shipment-report">
         <span class="nav-icon">📦</span><span class="nav-label">تقارير التصدير</span>
+      </a>
+      <a class="nav-item" onclick="showPage('export')" data-page="export">
+        <span class="nav-icon">🚢</span><span class="nav-label">نظام التصدير</span>
       </a>
 
       <div class="nav-section-label">الإعدادات</div>
@@ -215,6 +239,11 @@
 <script src="js/pages/crud-pages.js"></script>
 <script src="js/pages/employees.js"></script>
 <script src="js/pages/logistics.js"></script>
+<script src="js/pages/manufacturing.js"></script>
+<script src="js/pages/cost-centers.js"></script>
+<script src="js/pages/export.js"></script>
+<script src="js/pages/quality.js"></script>
+<script src="js/pages/crm.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
