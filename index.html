@@ -142,6 +142,9 @@
       <a class="nav-item" onclick="showPage('shipment-report')" data-page="shipment-report">
         <span class="nav-icon">📦</span><span class="nav-label">تقارير التصدير</span>
       </a>
+      <a class="nav-item" onclick="showPage('export')" data-page="export">
+        <span class="nav-icon">🚢</span><span class="nav-label">نظام التصدير</span>
+      </a>
 
       <div class="nav-section-label">الإعدادات</div>
       <a class="nav-item" onclick="showPage('employees')" data-page="employees">
@@ -220,6 +223,7 @@
 <script src="js/pages/logistics.js"></script>
 <script src="js/pages/manufacturing.js"></script>
 <script src="js/pages/cost-centers.js"></script>
+<script src="js/pages/export.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

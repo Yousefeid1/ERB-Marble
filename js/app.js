@@ -283,6 +283,7 @@ const pageTitles = {
   'shipment-report':  'تقارير التصدير',
   'quotations':       'عروض الأسعار',
   'cost-centers':     'مراكز التكلفة الفعلية',
+  'export':           'نظام التصدير',
 };
 
 // Track current page for real-time refresh
@@ -343,6 +344,7 @@ function showPage(pageName) {
     'shipment-report':  renderShipmentReport,
     'quotations':       renderQuotations,
     'cost-centers':     renderCostCenters,
+    'export':           renderExport,
   };
 
   if (renders[pageName]) renders[pageName]();
@@ -370,6 +372,7 @@ function _scheduleRefresh() {
         'shipments': renderShipments, 'shipment-report': renderShipmentReport,
         'quotations': renderQuotations,
         'cost-centers': renderCostCenters,
+        'export': renderExport,
       };
       if (renders[_currentPage]) renders[_currentPage]();
       loadNotifications();
