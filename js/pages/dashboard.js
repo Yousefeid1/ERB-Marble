@@ -9,7 +9,9 @@ async function renderDashboard() {
         <div class="kpi-card gold">
           <div class="kpi-icon">💰</div>
           <div class="kpi-value number">${formatMoney(k.monthly_sales)}</div>
-          <div class="kpi-label">مبيعات الشهر (${k.monthly_sales_count} فاتورة)</div>
+          <div class="kpi-label">مبيعات الشهر (${k.monthly_sales_count} فاتورة)
+            ${d.sales_growth !== null ? `<span style="font-size:12px;font-weight:700;color:${parseFloat(d.sales_growth)>=0?'var(--success)':'var(--danger)'};margin-right:6px">${parseFloat(d.sales_growth)>=0?'▲':'▼'} ${Math.abs(d.sales_growth)}%</span>` : ''}
+          </div>
         </div>
         <div class="kpi-card green">
           <div class="kpi-icon">🏦</div>
@@ -52,6 +54,44 @@ async function renderDashboard() {
           <div id="top-customers-list"></div>
         </div>
       </div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="card">
+        <div class="card-header"><span class="card-title">🏆 أكثر المنتجات مبيعاً</span></div>
+        <div id="top-products-list" style="padding:8px 4px">
+          ${(d.top_products && d.top_products.length) ? (() => {
+            const maxQ = Math.max(...d.top_products.map(p => p.qty));
+            return d.top_products.map((p,i) => `
+              <div style="margin-bottom:12px">
+                <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+                  <span style="font-size:13px;font-weight:600">${i+1}. ${p.name}</span>
+                  <span style="font-size:13px;color:var(--accent)">${p.qty} وحدة</span>
+                </div>
+                <div style="height:6px;background:var(--bg-input);border-radius:3px">
+                  <div style="height:100%;background:linear-gradient(90deg,var(--accent-dark),var(--accent));border-radius:3px;width:${(p.qty/maxQ*100).toFixed(1)}%"></div>
+                </div>
+              </div>`).join('');
+          })() : '<div class="empty-state" style="padding:30px"><div class="empty-icon">📦</div><p>لا توجد بيانات</p></div>'}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">🚨 تنبيهات المخزون المنخفض</span></div>
+        <div>
+          ${(d.low_stock_products && d.low_stock_products.length) ? d.low_stock_products.map(p => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 4px;border-bottom:1px solid var(--border)">
+              <div>
+                <div style="font-size:13px;font-weight:600">${p.name}</div>
+                <div style="font-size:12px;color:var(--text-muted)">${p.code}</div>
+              </div>
+              <div style="text-align:center">
+                <div style="font-size:16px;font-weight:700;color:var(--danger)">${p.stock_qty}</div>
+                <div style="font-size:11px;color:var(--text-muted)">الحد الأدنى: ${p.min_stock}</div>
+              </div>
+            </div>`).join('') : '<div class="empty-state" style="padding:30px"><div class="empty-icon">✅</div><p>المخزون بمستوى جيد</p></div>'}
+        </div>
+      </div>
+    </div>
 
       <div class="card">
         <div class="card-header">
