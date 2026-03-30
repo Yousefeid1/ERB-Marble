@@ -2,21 +2,6 @@
 // Mock API Client - Marble ERP (localStorage)
 // ============================================
 
-// ===== تنظيف وتعقيم المدخلات (XSS Protection) =====
-function sanitize(str) {
-  if (typeof str !== 'string') return str;
-  // رفض النصوص التي تتجاوز الحد الأقصى المسموح
-  if (str.length > 1000) throw new Error('النص طويل جداً — الحد الأقصى 1000 حرف');
-  return str
-    .replace(/<[^>]*>/g, '')        // إزالة وسوم HTML
-    .replace(/&/g,  '&amp;')        // ترميز الرموز الخاصة لمنع XSS
-    .replace(/</g,  '&lt;')
-    .replace(/>/g,  '&gt;')
-    .replace(/"/g,  '&quot;')
-    .replace(/'/g,  '&#x27;')
-    .replace(/\//g, '&#x2F;')
-    .trim();
-}
 
 // دالة تشفير بسيطة للكلمات المرور (للبيئة الأمامية فقط)
 function simpleHash(str) {

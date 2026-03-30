@@ -453,10 +453,6 @@ function formatMoney(n, currency = 'EGP') {
   return amount + ' ' + currency;
 }
 
-function formatDate(d) {
-  if (!d) return '-';
-  return new Date(d).toLocaleDateString('ar-EG');
-}
 
 function statusBadge(status) {
   const map = {
