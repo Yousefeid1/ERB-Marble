@@ -263,7 +263,7 @@ function renderSlabRows(slabs) {
   return slabs.map(s => `
     <tr>
       <td class="number"><strong>${s.code}</strong></td>
-      <td class="number">${s.block_code}</td>
+      <td class="number">${buildNavLink(s.block_code, 'cutting', s.block_id)}</td>
       <td>${s.type}</td>
       <td><span class="badge ${s.grade === 'A' ? 'badge-success' : 'badge-warning'}">${s.grade}</span></td>
       <td class="number">${s.width}</td>

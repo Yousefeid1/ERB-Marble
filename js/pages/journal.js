@@ -464,7 +464,7 @@ function renderCheckRows(list) {
       <td><strong>${c.checkNo||'-'}</strong></td>
       <td><span class="badge ${c.type==='received'?'badge-success':'badge-info'}">${c.type==='received'?'مستلم':'مصدر'}</span></td>
       <td>${c.bank||'-'}</td>
-      <td>${c.partyName||'-'}</td>
+      <td>${buildNavLink(c.partyName, c.type === 'received' ? 'customers' : 'suppliers', c.partyId) || '-'}</td>
       <td class="number">${formatMoney(c.amount, c.currency||'EGP')}</td>
       <td>${formatDate(c.issueDate)}</td>
       <td>${formatDate(c.dueDate)}</td>

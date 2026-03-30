@@ -88,7 +88,7 @@ function renderSalesRows(sales) {
   return sales.map(s => `
     <tr>
       <td class="number"><strong>${s.invoice_number}</strong></td>
-      <td>${s.customer}</td>
+      <td>${buildNavLink(s.customer, 'customers', s.customer_id)}</td>
       <td>${formatDate(s.invoice_date)}</td>
       <td class="${getDueDateClass(s)}">${formatDate(s.due_date)}</td>
       <td class="number">${formatMoney(s.total_amount, s.currency || 'EGP')}</td>
@@ -574,7 +574,7 @@ function renderQuotationRows(quotations) {
   return quotations.map(q => `
     <tr>
       <td data-label="رقم العرض" class="number">${q.quotation_number}</td>
-      <td data-label="العميل">${q.customer}</td>
+      <td data-label="العميل">${buildNavLink(q.customer, 'customers', q.customer_id)}</td>
       <td data-label="التاريخ">${formatDate(q.date)}</td>
       <td data-label="صالح حتى">${formatDate(q.valid_until) || '-'}</td>
       <td data-label="الإجمالي" class="number">${formatMoney(q.total_amount, q.currency || 'EGP')}</td>

@@ -1165,7 +1165,7 @@ function renderReportCustomerCredit() {
               const usedBar = creditLimit > 0 ? Math.min(usedPct, 100) : 0;
               return `
                 <tr style="${isBreached ? 'background:rgba(224,82,82,0.06)' : ''}">
-                  <td><strong>${c.name}</strong><br>
+                  <td><strong>${buildNavLink(c.name, 'customers', c.id)}</strong><br>
                     <span style="font-size:11px;color:var(--text-muted)">${c.phone || ''}</span>
                   </td>
                   <td class="number" style="color:${balance>0?'var(--danger)':'var(--success)'};font-weight:700">

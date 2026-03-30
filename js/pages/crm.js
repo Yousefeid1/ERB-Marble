@@ -938,7 +938,7 @@ function _renderTabInvoices(customerId, customer) {
                  const remaining = (inv.total_amount || 0) - (inv.paid_amount || 0);
                  return `
                    <tr>
-                     <td class="number"><strong>${inv.invoice_number}</strong></td>
+                     <td class="number"><strong>${buildNavLink(inv.invoice_number, 'sales', inv.id)}</strong></td>
                      <td>${formatDate(inv.invoice_date)}</td>
                      <td class="number">${formatMoney(inv.total_amount)}</td>
                      <td class="number text-success">${formatMoney(inv.paid_amount || 0)}</td>

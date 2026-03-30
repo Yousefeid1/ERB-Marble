@@ -299,7 +299,7 @@ function renderShipmentRows(shipments) {
     <tr>
       <td class="number"><strong>${s.shipment_number}</strong></td>
       <td><span class="badge ${s.ship_type === 'بحري' ? 'badge-info' : 'badge-warning'}">${s.ship_type === 'بحري' ? '🚢 بحري' : '🚛 بري'}</span></td>
-      <td class="number">${s.invoice_number ? `<span style="color:var(--accent)">${s.invoice_number}</span>` : '-'}</td>
+      <td class="number">${buildNavLink(s.invoice_number, 'sales', s.invoice_id) || '-'}</td>
       <td>${s.customer}</td>
       <td>${s.destination || '-'}</td>
       <td>
@@ -781,7 +781,7 @@ function renderShipmentReportRows(items) {
     <tr>
       <td class="number"><strong>${s.shipment_number}</strong></td>
       <td><span class="badge ${s.ship_type === 'بحري' ? 'badge-info' : 'badge-warning'}">${s.ship_type === 'بحري' ? '🚢 بحري' : '🚛 بري'}</span></td>
-      <td class="number">${s.invoice_number ? `<span style="color:var(--accent)">${s.invoice_number}</span>` : '-'}</td>
+      <td class="number">${buildNavLink(s.invoice_number, 'sales', s.invoice_id) || '-'}</td>
       <td>${s.customer}</td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
         ${(s.products && s.products.length) ? s.products.map(p => `${p.name} (${p.qty})`).join(' | ') : '-'}

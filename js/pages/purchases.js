@@ -59,7 +59,7 @@ function renderPurchaseRows(purchases) {
   return purchases.map(p => `
     <tr>
       <td class="number"><strong>${p.invoice_number}</strong></td>
-      <td>${p.supplier}</td>
+      <td>${buildNavLink(p.supplier, 'suppliers', p.supplier_id)}</td>
       <td>${formatDate(p.invoice_date)}</td>
       <td>${formatDate(p.due_date)}</td>
       <td class="number">${formatMoney(p.total_amount)}</td>

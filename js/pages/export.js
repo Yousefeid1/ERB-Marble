@@ -274,7 +274,7 @@ function _renderOrderRow(o) {
   return `
     <tr>
       <td><strong>${o.exportOrderNo}</strong></td>
-      <td>${o.customerName || '-'}</td>
+      <td>${buildNavLink(o.customerName, 'customers', o.customerId)}</td>
       <td>${o.destination  || '-'}</td>
       <td>${sym} ${o.currency}</td>
       <td class="number">${sym} ${formatMoney(o.totalRevenue)}</td>

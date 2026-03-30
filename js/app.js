@@ -869,3 +869,47 @@ async function submitForceChangePassword() {
     closeModal();
   } catch(e) { errEl.textContent = e.message; }
 }
+
+// ===== روابط التنقل بين الصفحات =====
+function buildNavLink(text, page, id, cssClass) {
+  if (!text || !page || !id) return text || '—';
+  cssClass = cssClass || '';
+  // تشفير النص لتجنب XSS
+  const safe = String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const safeId = parseInt(id) || 0;
+  if (!safeId) return safe;
+  return '<a class="nav-ref ' + cssClass + '" onclick="navigateToEntity(\'' + page + '\',' + safeId + ')">' + safe + '</a>';
+}
+
+function navigateToEntity(page, id) {
+  // التحقق من صحة اسم الصفحة — قائمة بيضاء للحماية
+  const allowedPages = [
+    'dashboard', 'sales', 'customers', 'purchases', 'suppliers',
+    'payments', 'cutting', 'slabs', 'manufacturing', 'export',
+    'logistics', 'shipments', 'reports', 'crm', 'journal',
+    'employees', 'quality', 'cost-centers', 'settings', 'inventory'
+  ];
+  if (!allowedPages.includes(page)) return;
+
+  // استخدم الدالة الموجودة للتنقل
+  if (typeof showPage === 'function') showPage(page);
+  else if (typeof navigateTo === 'function') navigateTo(page);
+  else if (typeof loadPage === 'function') loadPage(page);
+
+  setTimeout(() => {
+    // محاولة فتح تفاصيل العنصر لو في دالة مخصصة
+    const fn = window['openDetail_' + page];
+    if (typeof fn === 'function') { fn(id); return; }
+    // وإلا — ابحث عن الصف وميّزه
+    const row = document.querySelector('[data-id="' + id + '"]') ||
+                document.querySelector('[data-record-id="' + id + '"]');
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const orig = row.style.background;
+    row.style.background = 'var(--primary-light, #e6f1fb)';
+    row.style.transition  = 'background .5s';
+    setTimeout(() => {
+      row.style.background = orig;
+    }, 2000);
+  }, 400);
+}

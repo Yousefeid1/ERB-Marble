@@ -74,11 +74,11 @@ function renderPaymentRows(payments) {
           ${p.type === 'receipt' ? '⬇ مقبوض' : '⬆ مدفوع'}
         </span>
       </td>
-      <td><strong>${p.party}</strong><br><small class="text-muted">${p.party_type === 'customer' ? 'عميل' : 'مورد'}</small></td>
+      <td><strong>${buildNavLink(p.party, p.type === 'receipt' ? 'customers' : 'suppliers', p.party_id)}</strong><br><small class="text-muted">${p.party_type === 'customer' ? 'عميل' : 'مورد'}</small></td>
       <td class="number ${p.type === 'receipt' ? 'text-success' : 'text-danger'}"><strong>${formatMoney(p.amount)}</strong></td>
       <td>${formatDate(p.date)}</td>
       <td>${p.method === 'bank' ? '🏦 تحويل بنكي' : p.method === 'cash' ? '💵 نقدي' : p.method === 'cheque' ? '📄 شيك' : p.method}</td>
-      <td class="number">${p.reference || '-'}</td>
+      <td class="number">${buildNavLink(p.reference, p.type === 'receipt' ? 'sales' : 'purchases', p.invoice_id) || '-'}</td>
       <td class="text-muted">${p.notes || '-'}</td>
       <td>${p.currency || 'EGP'}</td>
     </tr>

@@ -193,7 +193,7 @@ function renderManufacturingRows(stages) {
 
     return `
       <tr>
-        <td class="number"><strong>${s.blockId || '—'}</strong></td>
+        <td class="number"><strong>${buildNavLink(s.blockId, 'cutting', s.blockId)}</strong></td>
         <td>${stageName}</td>
         <td>${s.machineId || '—'}</td>
         <td>${s.operatorName || '—'}</td>

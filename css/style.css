@@ -1276,3 +1276,13 @@ tbody td {
     gap: 12px;
   }
 }
+
+/* روابط التنقل بين الصفحات */
+.nav-ref {
+  color: var(--primary, #185fa5) !important;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  transition: opacity .15s;
+}
+.nav-ref:hover { opacity: .75; }
