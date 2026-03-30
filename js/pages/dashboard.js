@@ -93,16 +93,15 @@ async function renderDashboard() {
     if (parseFloat(wasteRate) > targetWaste)
       alerts.push({ type: 'warning', icon: '♻️', text: `نسبة الهالك ${wasteRate}% تتجاوز الهدف ${targetWaste}%`, action: "showPage('report-waste')" });
 
-    // إرسال إشعار تيليجرام للمخزون المنخفض
+    // إرسال إشعار تيليجرام للمخزون المنخفض (رسالة واحدة مجمّعة)
     const _tgD = DB.get('settings') || {};
     if (_tgD.tgNotifyLowStock && d.low_stock_products && d.low_stock_products.length) {
-      d.low_stock_products.forEach(p => {
-        sendTelegramNotification(
-          '⚠️ <b>مخزون منخفض</b>\n' +
-          'المنتج: ' + p.name + '\n' +
-          'المتبقي: ' + p.stock_qty + ' ' + (p.unit || 'وحدة')
-        );
-      });
+      const lines = d.low_stock_products
+        .map(p => '• ' + p.name + ': ' + p.stock_qty + ' ' + (p.unit || 'وحدة'))
+        .join('\n');
+      sendTelegramNotification(
+        '⚠️ <b>تنبيه مخزون منخفض</b>\n' + lines
+      );
     }
     // إرسال التقرير اليومي عند فتح النظام
     checkAndSendDailyReport();

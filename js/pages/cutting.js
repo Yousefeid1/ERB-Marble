@@ -393,7 +393,7 @@ function generateSlabQR(slabJson) {
 
 function printSlabQR() {
   var canvas = document.querySelector('#_qrBox canvas');
-  if (!canvas) { showToast('تعذر إنشاء QR', 'error'); return; }
+  if (!canvas) { toast('تعذر إنشاء QR', 'error'); return; }
   var w = window.open('');
   w.document.write(
     '<html><head><title>QR اللوح</title>' +

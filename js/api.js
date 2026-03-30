@@ -8,7 +8,6 @@ function sanitize(str) {
   // رفض النصوص التي تتجاوز الحد الأقصى المسموح
   if (str.length > 1000) throw new Error('النص طويل جداً — الحد الأقصى 1000 حرف');
   return str
-    .replace(/<[^>]*>/g, '')        // إزالة وسوم HTML
     .replace(/&/g,  '&amp;')        // ترميز الرموز الخاصة لمنع XSS
     .replace(/</g,  '&lt;')
     .replace(/>/g,  '&gt;')

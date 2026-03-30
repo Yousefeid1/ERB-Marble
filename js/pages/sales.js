@@ -334,7 +334,7 @@ async function saveSale() {
     sendTelegramNotification(
       '🧾 <b>فاتورة مبيعات جديدة</b>\n' +
       'العميل: ' + (custEl.options[custEl.selectedIndex].dataset.name || '') + '\n' +
-      'الإجمالي: ' + formatCurrency(subtotal + tax) + '\n' +
+      'الإجمالي: ' + formatMoney(subtotal + tax) + '\n' +
       'التاريخ: ' + formatDate(document.getElementById('ns-date').value)
     );
   }

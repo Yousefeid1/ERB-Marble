@@ -494,7 +494,7 @@ function saveTelegramSettings() {
   const token  = document.getElementById('tgToken')?.value?.trim();
   const chatId = document.getElementById('tgChatId')?.value?.trim();
   if (!token || !chatId) {
-    showToast('يرجى إدخال الـ Token والـ Chat ID', 'warning');
+    toast('يرجى إدخال الـ Token والـ Chat ID', 'warning');
     return;
   }
   const s = DB.get('settings') || {};
@@ -506,20 +506,20 @@ function saveTelegramSettings() {
   s.tgNotifyNewSale       = document.getElementById('tgNewSale')?.checked   || false;
   s.enableDailyReport     = document.getElementById('tgDailyReport')?.checked || false;
   DB.set('settings', s);
-  showToast('تم حفظ إعدادات تيليجرام ✓', 'success');
+  toast('تم حفظ إعدادات تيليجرام ✓', 'success');
 }
 
 async function testTelegramConnection() {
   const s = DB.get('settings') || {};
   if (!s.telegramBotToken || !s.telegramChatId) {
-    showToast('يرجى حفظ الإعدادات أولاً', 'warning'); return;
+    toast('يرجى حفظ الإعدادات أولاً', 'warning'); return;
   }
   await sendTelegramNotification(
     '✅ <b>اختبار الاتصال</b>\n' +
     'نظام ERP الرخام والجرانيت متصل بنجاح!\n' +
-    'الوقت: ' + formatDate(new Date().toISOString(), true)
+    'الوقت: ' + new Date().toLocaleString('ar-EG')
   );
-  showToast('تم إرسال رسالة اختبار — تحقق من تيليجرام', 'success');
+  toast('تم إرسال رسالة اختبار — تحقق من تيليجرام', 'success');
 }
 
 function checkAndSendDailyReport() {
@@ -539,8 +539,8 @@ function checkAndSendDailyReport() {
 
   sendTelegramNotification(
     '📊 <b>ملخص اليوم</b>\n' +
-    'المبيعات: ' + formatCurrency(todaySales) + '\n' +
-    'المتحصلات: ' + formatCurrency(todayReceipts) + '\n' +
+    'المبيعات: ' + formatMoney(todaySales) + '\n' +
+    'المتحصلات: ' + formatMoney(todayReceipts) + '\n' +
     'الفواتير: ' + sales.filter(i => (i.invoice_date || i.date || '').slice(0, 10) === today).length + '\n' +
     'التاريخ: ' + formatDate(today)
   );
