@@ -4,7 +4,116 @@ async function renderDashboard() {
     const d = await api.dashboard();
     const k = d.kpis;
 
+    // ===== حساب مؤشرات التصنيع والتصدير الجديدة =====
+    const now   = new Date();
+    const thisM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const prevM = (() => {
+      const p = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      return `${p.getFullYear()}-${String(p.getMonth() + 1).padStart(2, '0')}`;
+    })();
+
+    // تكلفة المتر المصنع هذا الشهر
+    const mfgStages  = DB.getAll('manufacturing_stages');
+    const thisMStages = mfgStages.filter(s => s.date && s.date.startsWith(thisM));
+    const prevMStages = mfgStages.filter(s => s.date && s.date.startsWith(prevM));
+
+    const calcCPM = (stages) => {
+      const totalCost = stages.reduce((s, r) =>
+        s + (r.directCost || 0) + (r.laborCost || 0) + (r.materialCost || 0) + (r.transportCost || 0), 0);
+      const totalOut  = stages.reduce((s, r) => s + (r.outputQuantity || 0), 0);
+      return totalOut > 0 ? totalCost / totalOut : 0;
+    };
+
+    const thisCPM  = calcCPM(thisMStages);
+    const prevCPM  = calcCPM(prevMStages);
+    const cpmGrowth = prevCPM > 0 ? ((thisCPM - prevCPM) / prevCPM * 100).toFixed(1) : null;
+
+    // إيرادات التصدير vs المحلية هذا الشهر
+    const exportOrders   = DB.getAll('export_orders');
+    const thisExportRev  = exportOrders.filter(o => o.shippingDate && o.shippingDate.startsWith(thisM))
+      .reduce((s, o) => s + (o.totalRevenue || 0), 0);
+    const allSales       = DB.getAll('sales');
+    const thisLocalRev   = allSales.filter(s => s.invoice_date && s.invoice_date.startsWith(thisM)
+                            && s.status !== 'cancelled')
+      .reduce((s, inv) => s + (inv.total_amount || 0), 0);
+
+    // نسبة الهالك الفعلية
+    const totalOutput   = mfgStages.reduce((s, r) => s + (r.outputQuantity || 0), 0);
+    const totalWaste    = mfgStages.reduce((s, r) => s + (r.wasteQuantity  || 0), 0);
+    const wasteRate     = (totalOutput + totalWaste) > 0
+      ? (totalWaste / (totalOutput + totalWaste) * 100).toFixed(1) : '0.0';
+    const settings      = DB.get('settings') || {};
+    const targetWaste   = parseFloat(settings.target_waste_pct || 5); // الهدف الافتراضي 5% - يُعدَّل من الإعدادات
+
+    // أعلى 5 عملاء إيراداً هذا الشهر
+    const top5Customers = (() => {
+      const map = {};
+      allSales.filter(s => s.invoice_date && s.invoice_date.startsWith(thisM) && s.status !== 'cancelled')
+        .forEach(s => { map[s.customer] = (map[s.customer] || 0) + (s.total_amount || 0); });
+      return Object.entries(map).map(([name, total]) => ({ name, total }))
+        .sort((a, b) => b.total - a.total).slice(0, 5);
+    })();
+
+    // أعلى 5 ماكينات تكلفةً هذا الشهر
+    const top5Machines = (() => {
+      const map = {};
+      thisMStages.forEach(s => {
+        if (!s.machineId) return;
+        const cost = (s.directCost || 0) + (s.laborCost || 0) + (s.materialCost || 0) + (s.transportCost || 0);
+        map[s.machineId] = (map[s.machineId] || 0) + cost;
+      });
+      return Object.entries(map).map(([id, cost]) => ({ id, cost }))
+        .sort((a, b) => b.cost - a.cost).slice(0, 5);
+    })();
+
+    // تنبيهات ذكية
+    const alerts = [];
+    if (k.overdue_count > 0)
+      alerts.push({ type: 'danger', icon: '⚠️', text: `${k.overdue_count} فاتورة متأخرة بقيمة ${formatMoney(k.overdue_amount)}`, action: "showPage('aging')" });
+    if (k.low_stock_count > 0)
+      alerts.push({ type: 'warning', icon: '📦', text: `${k.low_stock_count} صنف وصل للحد الأدنى للمخزون`, action: "showPage('report-inventory')" });
+    const checksAlerts = DB.getAll('checks').filter(c => {
+      if (!c.dueDate || c.status !== 'pending') return false;
+      const days = Math.floor((new Date(c.dueDate) - new Date()) / 86400000);
+      return days >= 0 && days <= 7;
+    });
+    if (checksAlerts.length > 0)
+      alerts.push({ type: 'warning', icon: '🏦', text: `${checksAlerts.length} شيك يستحق خلال 7 أيام`, action: "showPage('checks')" });
+    // فحص تجاوز حد الائتمان
+    const crmCustomers = DB.getAll('crm_customers');
+    const breached = crmCustomers.filter(c => {
+      if (!c.creditLimit || c.creditLimit <= 0) return false;
+      const bal = DB.getAll('sales')
+        .filter(s => s.customer_id === c.id && s.status !== 'paid' && s.status !== 'cancelled')
+        .reduce((s, inv) => s + ((inv.total_amount || 0) - (inv.paid_amount || 0)), 0);
+      return bal > c.creditLimit;
+    });
+    if (breached.length > 0)
+      alerts.push({ type: 'danger', icon: '💳', text: `${breached.length} عميل تجاوز حد الائتمان`, action: "showPage('report-customer-credit')" });
+    if (parseFloat(wasteRate) > targetWaste)
+      alerts.push({ type: 'warning', icon: '♻️', text: `نسبة الهالك ${wasteRate}% تتجاوز الهدف ${targetWaste}%`, action: "showPage('report-waste')" });
+
     content.innerHTML = `
+      <!-- ===== الملخص التنفيذي ===== -->
+      ${alerts.length > 0 ? `
+      <div class="card" style="border-right:3px solid var(--warning);margin-bottom:16px;padding:12px 16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:16px">🔔</span>
+          <strong>تنبيهات تحتاج متابعة</strong>
+          <span class="badge badge-danger">${alerts.length}</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${alerts.map(a => `
+            <div onclick="${a.action}" style="cursor:pointer;display:flex;align-items:center;gap:6px;
+                 padding:6px 10px;background:${a.type==='danger'?'rgba(224,82,82,0.1)':'rgba(255,182,72,0.1)'};
+                 border:1px solid ${a.type==='danger'?'rgba(224,82,82,0.3)':'rgba(255,182,72,0.3)'};
+                 border-radius:6px;font-size:13px;color:${a.type==='danger'?'var(--danger)':'var(--warning)'}">
+              ${a.icon} ${a.text}
+            </div>`).join('')}
+        </div>
+      </div>` : ''}
+
+      <!-- ===== KPIs الأساسية ===== -->
       <div class="kpi-grid">
         <div class="kpi-card gold">
           <div class="kpi-icon">💰</div>
@@ -37,6 +146,32 @@ async function renderDashboard() {
           <div class="kpi-icon">🚨</div>
           <div class="kpi-value">${k.low_stock_count}</div>
           <div class="kpi-label">منتجات نقص المخزون</div>
+        </div>
+      </div>
+
+      <!-- ===== KPIs الإنتاج والتصدير ===== -->
+      <div class="kpi-grid" style="margin-top:-8px">
+        <div class="kpi-card" onclick="showPage('report-cost-per-meter')" style="cursor:pointer">
+          <div class="kpi-icon">📐</div>
+          <div class="kpi-value number">${formatMoney(thisCPM)}</div>
+          <div class="kpi-label">متوسط تكلفة المتر هذا الشهر
+            ${cpmGrowth !== null ? `<span style="font-size:12px;font-weight:700;color:${parseFloat(cpmGrowth)<=0?'var(--success)':'var(--danger)'};margin-right:6px">${parseFloat(cpmGrowth)<=0?'▼':'▲'} ${Math.abs(cpmGrowth)}%</span>` : ''}
+          </div>
+        </div>
+        <div class="kpi-card" onclick="showPage('report-export-profit')" style="cursor:pointer">
+          <div class="kpi-icon">🚢</div>
+          <div class="kpi-value number">${formatMoney(thisExportRev)}</div>
+          <div class="kpi-label">إيرادات التصدير هذا الشهر</div>
+        </div>
+        <div class="kpi-card" onclick="showPage('report-export-profit')" style="cursor:pointer">
+          <div class="kpi-icon">🏠</div>
+          <div class="kpi-value number">${formatMoney(thisLocalRev)}</div>
+          <div class="kpi-label">إيرادات السوق المحلي هذا الشهر</div>
+        </div>
+        <div class="kpi-card ${parseFloat(wasteRate) > targetWaste ? 'red' : 'green'}" onclick="showPage('report-waste')" style="cursor:pointer">
+          <div class="kpi-icon">♻️</div>
+          <div class="kpi-value">${wasteRate}%</div>
+          <div class="kpi-label">نسبة الهالك الفعلية (الهدف: ${targetWaste}%)</div>
         </div>
       </div>
 
@@ -89,6 +224,52 @@ async function renderDashboard() {
                 <div style="font-size:11px;color:var(--text-muted)">الحد الأدنى: ${p.min_stock}</div>
               </div>
             </div>`).join('') : '<div class="empty-state" style="padding:30px"><div class="empty-icon">✅</div><p>المخزون بمستوى جيد</p></div>'}
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== أعلى 5 هذا الشهر ===== -->
+    <div class="charts-grid" style="margin-top:4px">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🥇 أعلى 5 عملاء إيراداً هذا الشهر</span>
+          <button class="btn btn-secondary btn-sm" onclick="showPage('crm')">CRM</button>
+        </div>
+        <div style="padding:4px">
+          ${top5Customers.length > 0 ? (() => {
+            const maxT = Math.max(...top5Customers.map(c => c.total));
+            return top5Customers.map((c, i) => `
+              <div style="margin-bottom:10px">
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                  <span style="font-size:13px;font-weight:600">${i+1}. ${c.name}</span>
+                  <span style="font-size:13px;color:var(--accent)">${formatMoney(c.total)}</span>
+                </div>
+                <div style="height:5px;background:var(--bg-input);border-radius:3px">
+                  <div style="height:100%;background:linear-gradient(90deg,var(--accent-dark),var(--accent));border-radius:3px;width:${(c.total/maxT*100).toFixed(1)}%"></div>
+                </div>
+              </div>`).join('');
+          })() : '<div class="empty-state" style="padding:20px"><p>لا توجد مبيعات هذا الشهر</p></div>'}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">⚙️ أعلى 5 ماكينات تكلفةً هذا الشهر</span>
+          <button class="btn btn-secondary btn-sm" onclick="showPage('manufacturing')">التصنيع</button>
+        </div>
+        <div style="padding:4px">
+          ${top5Machines.length > 0 ? (() => {
+            const maxC = Math.max(...top5Machines.map(m => m.cost));
+            return top5Machines.map((m, i) => `
+              <div style="margin-bottom:10px">
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                  <span style="font-size:13px;font-weight:600">${i+1}. ${m.id}</span>
+                  <span style="font-size:13px;color:var(--danger)">${formatMoney(m.cost)}</span>
+                </div>
+                <div style="height:5px;background:var(--bg-input);border-radius:3px">
+                  <div style="height:100%;background:linear-gradient(90deg,var(--danger),var(--warning));border-radius:3px;width:${(m.cost/maxC*100).toFixed(1)}%"></div>
+                </div>
+              </div>`).join('');
+          })() : '<div class="empty-state" style="padding:20px"><p>لا توجد عمليات تصنيع هذا الشهر</p></div>'}
         </div>
       </div>
     </div>
