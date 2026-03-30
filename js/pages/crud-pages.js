@@ -384,6 +384,49 @@ async function renderSettings() {
         </p>
       </div>
 
+      <!-- ===== إعدادات تيليجرام ===== -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">📱 إشعارات تيليجرام</span></div>
+        <div class="form-grid">
+          <div class="form-group form-full">
+            <label>رمز البوت (Bot Token)</label>
+            <input type="text" id="set-tgBotToken" placeholder="123456789:AAF..." value="${s.tgBotToken || ''}">
+          </div>
+          <div class="form-group form-full">
+            <label>معرّف المحادثة (Chat ID)</label>
+            <input type="text" id="set-tgChatId" placeholder="-100123456789" value="${s.tgChatId || ''}">
+          </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="set-tgNotifyLowStock" ${s.tgNotifyLowStock ? 'checked' : ''}>
+              إشعار عند نقص المخزون
+            </label>
+          </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="set-tgNotifyOverdue" ${s.tgNotifyOverdue ? 'checked' : ''}>
+              إشعار عند تأخر الفواتير
+            </label>
+          </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="set-tgNotifyChecks" ${s.tgNotifyChecks ? 'checked' : ''}>
+              إشعار عند استحقاق الشيكات
+            </label>
+          </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="set-tgDailyReport" ${s.tgDailyReport ? 'checked' : ''}>
+              إرسال تقرير يومي
+            </label>
+          </div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="saveSettings()">💾 حفظ الإعدادات</button>
+          <button class="btn btn-secondary" onclick="testTelegramMessage()">📤 اختبار تيليجرام</button>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-header"><span class="card-title">🗑 إعادة تعيين البيانات</span></div>
         <p style="color:var(--text-secondary);margin-bottom:12px">حذف جميع البيانات المحفوظة وإعادة البيانات التجريبية الافتراضية</p>
@@ -459,17 +502,45 @@ async function renderSettings() {
 
 async function saveSettings() {
   const data = {
-    company_name: document.getElementById('set-name').value,
-    phone:        document.getElementById('set-phone').value,
-    email:        document.getElementById('set-email').value,
-    address:      document.getElementById('set-address').value,
-    currency:     document.getElementById('set-currency').value,
-    tax_rate:     parseFloat(document.getElementById('set-tax').value) || 14,
+    company_name:      document.getElementById('set-name').value,
+    phone:             document.getElementById('set-phone').value,
+    email:             document.getElementById('set-email').value,
+    address:           document.getElementById('set-address').value,
+    currency:          document.getElementById('set-currency').value,
+    tax_rate:          parseFloat(document.getElementById('set-tax').value) || 14,
+    // إعدادات تيليجرام
+    tgBotToken:        (document.getElementById('set-tgBotToken')?.value  || '').trim(),
+    tgChatId:          (document.getElementById('set-tgChatId')?.value    || '').trim(),
+    tgNotifyLowStock:  document.getElementById('set-tgNotifyLowStock')?.checked  || false,
+    tgNotifyOverdue:   document.getElementById('set-tgNotifyOverdue')?.checked   || false,
+    tgNotifyChecks:    document.getElementById('set-tgNotifyChecks')?.checked    || false,
+    tgDailyReport:     document.getElementById('set-tgDailyReport')?.checked     || false,
   };
   await api.saveSettings(data);
   const el = document.getElementById('company-name-sidebar');
   if (el && data.company_name) el.textContent = data.company_name;
   toast('تم حفظ الإعدادات', 'success');
+}
+
+// اختبار إرسال رسالة تيليجرام
+function testTelegramMessage() {
+  sendTelegramNotification('✅ <b>اختبار ناجح</b>\nتم ربط نظام ERP بتيليجرام بنجاح.');
+  toast('تم إرسال رسالة الاختبار', 'info');
+}
+
+// ===== إرسال إشعار تيليجرام =====
+// تُرسل الرسالة فقط إذا كان توكن البوت ومعرّف المحادثة مُعيَّنَين في الإعدادات
+function sendTelegramNotification(message) {
+  var s = DB.get('settings') || {};
+  var token  = s.tgBotToken || '';
+  var chatId = s.tgChatId   || '';
+  if (!token || !chatId) return; // لا توكن → تجاهل صامت
+  var url = 'https://api.telegram.org/bot' + token + '/sendMessage';
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: 'HTML' })
+  }).catch(function(err) { console.warn('Telegram notification failed:', err); }); // تسجيل الخطأ بصمت
 }
 
 function resetAllData() {

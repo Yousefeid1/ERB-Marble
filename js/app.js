@@ -493,6 +493,25 @@ function showPage(pageName) {
   setTimeout(convertTablesToCards, 350);
 }
 
+// التنقل إلى صفحة محددة مع تمييز عنصر معين (يُستدعى من تنبيهات اللوحة)
+function navigateToEntity(page, id) {
+  showPage(page);
+  // تمييز العنصر بعد تحميل الصفحة إذا كان لديه معرّف
+  if (id) {
+    setTimeout(function() {
+      var safeId = String(id).replace(/[^a-zA-Z0-9_-]/g, '');
+      var el = document.getElementById('row-' + safeId) ||
+               document.querySelector('[data-id="' + CSS.escape(String(id)) + '"]');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.transition = 'background 0.5s';
+        el.style.background = 'rgba(200,169,110,0.25)';
+        setTimeout(function() { el.style.background = ''; }, 2000);
+      }
+    }, 600);
+  }
+}
+
 // ===== REAL-TIME REFRESH =====
 // Debounced refresh: avoids rapid re-renders when multiple DB changes fire at once
 let _refreshTimer = null;

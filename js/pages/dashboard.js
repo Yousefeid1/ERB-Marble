@@ -1,6 +1,249 @@
+// ============================================
+// لوحة التحكم الرئيسية - Dashboard
+// ============================================
+
+// ===== جمع جميع التنبيهات الذكية =====
+function collectAllAlerts() {
+  var alerts  = [];
+  var today   = new Date();
+  var in7Days = new Date(today.getTime() + 7 * 86400000);
+  var s = DB.get('settings') || {};
+
+  // 1. مخزون منخفض
+  var products = DB.getAll('products');
+  products.forEach(function(p) {
+    if ((p.stock_qty || 0) <= (p.min_stock || 5)) {
+      alerts.push({
+        level:    'warning',
+        category: 'مخزون',
+        text:     p.name + ': متبقي ' + (p.stock_qty || 0) + ' ' + (p.unit || 'وحدة'),
+        page:     'products',
+        id:       p.id
+      });
+      if (s.tgNotifyLowStock) sendTelegramNotification(
+        '⚠️ <b>مخزون منخفض</b>\n' + p.name +
+        ': متبقي ' + (p.stock_qty || 0) + ' ' + (p.unit || 'وحدة')
+      );
+    }
+  });
+
+  // 2. فواتير متأخرة أكثر من 30 يوم
+  var sales = DB.getAll('sales');
+  sales.forEach(function(inv) {
+    if (inv.status !== 'sent') return;
+    var days = daysBetween(inv.invoice_date);
+    if (days > 30) {
+      alerts.push({
+        level:    'danger',
+        category: 'مديونية',
+        text:     (inv.customer || '') + ' — ' +
+                  formatCurrency(inv.total_amount) + ' — ' + days + ' يوم',
+        page:     'sales',
+        id:       inv.id
+      });
+      if (s.tgNotifyOverdue) sendTelegramNotification(
+        '🔴 <b>فاتورة متأخرة ' + days + ' يوم</b>\n' +
+        'العميل: ' + (inv.customer || '') + '\n' +
+        'المبلغ: ' + formatCurrency(inv.total_amount)
+      );
+    }
+  });
+
+  // 3. شيكات تستحق خلال 7 أيام (غير مستحقة بعد أو مستحقة للتو)
+  var checks = DB.getAll('checks');
+  checks.forEach(function(chk) {
+    if (chk.status !== 'pending') return;
+    if (!chk.dueDate) return;
+    var due = new Date(chk.dueDate);
+    if (isNaN(due.getTime())) return;
+    if (due >= today && due <= in7Days) {
+      alerts.push({
+        level:    'info',
+        category: 'شيكات',
+        text:     (chk.partyName || '') + ' — ' +
+                  formatCurrency(chk.amount) + ' — ' +
+                  formatDate(chk.dueDate),
+        page:     'checks',
+        id:       chk.id
+      });
+      if (s.tgNotifyChecks) sendTelegramNotification(
+        '📅 <b>شيك يستحق قريباً</b>\n' +
+        (chk.partyName || '') + '\n' +
+        'المبلغ: ' + formatCurrency(chk.amount) + '\n' +
+        'الاستحقاق: ' + formatDate(chk.dueDate)
+      );
+    }
+  });
+
+  // 4. تجاوز حد الائتمان
+  var crmCustomers = DB.getAll('crm_customers');
+  crmCustomers.forEach(function(c) {
+    if (!c.creditLimit || c.creditLimit <= 0) return;
+    var bal = DB.getAll('sales')
+      .filter(function(inv) {
+        return inv.customer_id === c.id &&
+               inv.status !== 'paid' &&
+               inv.status !== 'cancelled';
+      })
+      .reduce(function(sum, inv) {
+        return sum + ((inv.total_amount || 0) - (inv.paid_amount || 0));
+      }, 0);
+    if (bal > c.creditLimit) {
+      alerts.push({
+        level:    'danger',
+        category: 'ائتمان',
+        text:     (c.name || '') + ' — مديونية ' +
+                  formatCurrency(bal) +
+                  ' / حد ' + formatCurrency(c.creditLimit),
+        page:     'crm',
+        id:       c.id
+      });
+    }
+  });
+
+  // 5. تذكير النسخ الاحتياطي
+  var lastBackup = localStorage.getItem('_lastBackup');
+  var backupDays = lastBackup ? daysBetween(lastBackup) : 999;
+  if (backupDays > 1) {
+    alerts.push({
+      level:    'warning',
+      category: 'نظام',
+      text:     'لم يتم عمل نسخة احتياطية منذ ' +
+                (backupDays >= 999 ? 'البداية' : backupDays + ' يوم'),
+      page:     'settings',
+      id:       null
+    });
+  }
+
+  return alerts;
+}
+
+// ===== عرض قسم التنبيهات الملوّن =====
+function renderAlertsSection(alerts) {
+  if (!alerts || !alerts.length) return '';
+
+  var colors = {
+    danger:  { bg: '#fcebeb', border: '#a32d2d', text: '#791f1f' },
+    warning: { bg: '#faeeda', border: '#854f0b', text: '#633806' },
+    info:    { bg: '#e6f1fb', border: '#185fa5', text: '#0c447c' }
+  };
+
+  return alerts.map(function(a) {
+    var c = colors[a.level] || colors.info;
+    var onclick = a.page
+      ? (a.id
+          ? 'navigateToEntity(\'' + a.page + '\',\'' + a.id + '\')'
+          : 'showPage(\'' + a.page + '\')')
+      : 'showPage(\'settings\')';
+    return '<div onclick="' + onclick + '" style="cursor:pointer;display:flex;align-items:center;gap:8px;' +
+      'padding:8px 12px;margin-bottom:6px;background:' + c.bg + ';' +
+      'border:1px solid ' + c.border + ';border-radius:8px;font-size:13px;color:' + c.text + '">' +
+      '<span style="font-weight:700;font-size:11px;padding:2px 6px;background:' + c.border +
+      ';color:#fff;border-radius:4px">' + (a.category || '') + '</span>' +
+      '<span>' + a.text + '</span>' +
+      '</div>';
+  }).join('');
+}
+
+// ===== مؤشرات الإنتاج =====
+function renderProductionKPIs() {
+  var mfg    = DB.getAll('manufacturing_stages');
+  var slabs  = DB.getAll('slabs');
+  var blocks = DB.getAll('blocks');
+
+  var thisMonth = new Date().toISOString().slice(0, 7);
+
+  // إجمالي الإنتاج هذا الشهر
+  var monthlyOutput = mfg
+    .filter(function(op) { return (op.date || '').slice(0, 7) === thisMonth; })
+    .reduce(function(sum, op) { return sum + (op.outputQuantity || 0); }, 0);
+
+  // نسبة الهالك هذا الشهر
+  var mfgThisMonth = mfg.filter(function(op) { return (op.date || '').slice(0, 7) === thisMonth; });
+  var totalIn  = mfgThisMonth.reduce(function(sum, op) { return sum + (op.inputQuantity  || 0); }, 0);
+  var totalOut = mfgThisMonth.reduce(function(sum, op) { return sum + (op.outputQuantity || 0); }, 0);
+  var wasteRate = totalIn > 0
+    ? ((totalIn - totalOut) / totalIn * 100).toFixed(1)
+    : '0.0';
+
+  // ألواح متاحة في المخزن
+  var availableSlabs = slabs.filter(function(s) {
+    return s.status === 'in_stock';
+  }).length;
+
+  // كتل في مرحلة القطع
+  var blocksInCutting = blocks.filter(function(b) {
+    return b.status === 'in_cutting';
+  }).length;
+
+  // متوسط تكلفة المتر (من مراحل التصنيع هذا الشهر)
+  var totalCostThisM = mfgThisMonth.reduce(function(sum, op) {
+    return sum + (op.directCost || 0) + (op.laborCost || 0) +
+                 (op.materialCost || 0) + (op.transportCost || 0);
+  }, 0);
+  var avgCost = totalOut > 0
+    ? formatCurrency(totalCostThisM / totalOut)
+    : '—';
+
+  return renderMiniKPI('إنتاج الشهر', monthlyOutput.toFixed(1) + ' وحدة', '#185fa5') +
+         renderMiniKPI('هالك الشهر', wasteRate + '%', parseFloat(wasteRate) > 5 ? '#a32d2d' : '#1a7a4a') +
+         renderMiniKPI('ألواح متاحة', availableSlabs + ' لوح', '#854f0b') +
+         renderMiniKPI('كتل في القطع', blocksInCutting + ' كتلة', '#6b2fa0') +
+         renderMiniKPI('متوسط تكلفة المتر', avgCost, '#0c447c');
+}
+
+// ===== بطاقة KPI صغيرة =====
+function renderMiniKPI(label, value, color) {
+  return '<div style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;' +
+    'padding:10px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;' +
+    'margin:0 4px 8px 4px;min-width:130px;text-align:center">' +
+    '<div style="font-size:16px;font-weight:700;color:' + (color || 'var(--accent)') + '">' + value + '</div>' +
+    '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">' + label + '</div>' +
+    '</div>';
+}
+
+// ===== التقرير اليومي التلقائي عبر تيليجرام =====
+function checkAndSendDailyReport() {
+  var today = new Date().toISOString().slice(0, 10);
+  var lastReport = localStorage.getItem('_lastDailyReport');
+  if (lastReport === today) return; // أُرسل اليوم بالفعل
+
+  var s = DB.get('settings') || {};
+  if (!s.tgDailyReport || !s.tgBotToken || !s.tgChatId) return; // غير مُفعَّل
+
+  // بناء ملخص سريع
+  var sales      = DB.getAll('sales');
+  var todaySales = sales.filter(function(inv) {
+    return inv.invoice_date === today && inv.status !== 'cancelled';
+  });
+  var todayTotal = todaySales.reduce(function(sum, inv) {
+    return sum + (inv.total_amount || 0);
+  }, 0);
+
+  var overdue = sales.filter(function(inv) {
+    return inv.status === 'sent' && daysBetween(inv.invoice_date) > 30;
+  }).length;
+
+  var lowStock = DB.getAll('products').filter(function(p) {
+    return (p.stock_qty || 0) <= (p.min_stock || 5);
+  }).length;
+
+  var msg =
+    '📊 <b>التقرير اليومي — ' + today + '</b>\n\n' +
+    '💰 مبيعات اليوم: ' + formatCurrency(todayTotal) + ' (' + todaySales.length + ' فاتورة)\n' +
+    '⚠️ فواتير متأخرة: ' + overdue + '\n' +
+    '📦 منتجات بمخزون منخفض: ' + lowStock;
+
+  sendTelegramNotification(msg);
+  localStorage.setItem('_lastDailyReport', today);
+}
+
 async function renderDashboard() {
   const content = document.getElementById('page-content');
   try {
+    // إرسال التقرير اليومي إن لزم
+    checkAndSendDailyReport();
+
     const d = await api.dashboard();
     const k = d.kpis;
 
@@ -66,52 +309,12 @@ async function renderDashboard() {
         .sort((a, b) => b.cost - a.cost).slice(0, 5);
     })();
 
-    // تنبيهات ذكية
-    const alerts = [];
-    if (k.overdue_count > 0)
-      alerts.push({ type: 'danger', icon: '⚠️', text: `${k.overdue_count} فاتورة متأخرة بقيمة ${formatMoney(k.overdue_amount)}`, action: "showPage('aging')" });
-    if (k.low_stock_count > 0)
-      alerts.push({ type: 'warning', icon: '📦', text: `${k.low_stock_count} صنف وصل للحد الأدنى للمخزون`, action: "showPage('report-inventory')" });
-    const checksAlerts = DB.getAll('checks').filter(c => {
-      if (!c.dueDate || c.status !== 'pending') return false;
-      const days = Math.floor((new Date(c.dueDate) - new Date()) / 86400000);
-      return days >= 0 && days <= 7;
-    });
-    if (checksAlerts.length > 0)
-      alerts.push({ type: 'warning', icon: '🏦', text: `${checksAlerts.length} شيك يستحق خلال 7 أيام`, action: "showPage('checks')" });
-    // فحص تجاوز حد الائتمان
-    const crmCustomers = DB.getAll('crm_customers');
-    const breached = crmCustomers.filter(c => {
-      if (!c.creditLimit || c.creditLimit <= 0) return false;
-      const bal = DB.getAll('sales')
-        .filter(s => s.customer_id === c.id && s.status !== 'paid' && s.status !== 'cancelled')
-        .reduce((s, inv) => s + ((inv.total_amount || 0) - (inv.paid_amount || 0)), 0);
-      return bal > c.creditLimit;
-    });
-    if (breached.length > 0)
-      alerts.push({ type: 'danger', icon: '💳', text: `${breached.length} عميل تجاوز حد الائتمان`, action: "showPage('report-customer-credit')" });
-    if (parseFloat(wasteRate) > targetWaste)
-      alerts.push({ type: 'warning', icon: '♻️', text: `نسبة الهالك ${wasteRate}% تتجاوز الهدف ${targetWaste}%`, action: "showPage('report-waste')" });
-
     content.innerHTML = `
-      <!-- ===== الملخص التنفيذي ===== -->
-      ${alerts.length > 0 ? `
-      <div class="card" style="border-right:3px solid var(--warning);margin-bottom:16px;padding:12px 16px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <span style="font-size:16px">🔔</span>
-          <strong>تنبيهات تحتاج متابعة</strong>
-          <span class="badge badge-danger">${alerts.length}</span>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">
-          ${alerts.map(a => `
-            <div onclick="${a.action}" style="cursor:pointer;display:flex;align-items:center;gap:6px;
-                 padding:6px 10px;background:${a.type==='danger'?'rgba(224,82,82,0.1)':'rgba(255,182,72,0.1)'};
-                 border:1px solid ${a.type==='danger'?'rgba(224,82,82,0.3)':'rgba(255,182,72,0.3)'};
-                 border-radius:6px;font-size:13px;color:${a.type==='danger'?'var(--danger)':'var(--warning)'}">
-              ${a.icon} ${a.text}
-            </div>`).join('')}
-        </div>
-      </div>` : ''}
+      <!-- ===== التنبيهات الذكية ===== -->
+      <div id="alertsContainer" style="margin-bottom:12px"></div>
+
+      <!-- ===== مؤشرات الإنتاج ===== -->
+      <div id="productionKPIsContainer" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px"></div>
 
       <!-- ===== KPIs الأساسية ===== -->
       <div class="kpi-grid">
@@ -303,6 +506,35 @@ async function renderDashboard() {
         </div>
       </div>
     `;
+
+    // ===== ملء التنبيهات الذكية =====
+    var allAlerts = collectAllAlerts();
+    var alertsEl = document.getElementById('alertsContainer');
+    if (alertsEl) {
+      if (allAlerts.length > 0) {
+        alertsEl.innerHTML =
+          '<div class="card" style="border-right:3px solid var(--warning);padding:12px 16px">' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
+          '<span style="font-size:16px">🔔</span>' +
+          '<strong>تنبيهات تحتاج متابعة</strong>' +
+          '<span class="badge badge-danger">' + allAlerts.length + '</span>' +
+          '</div>' +
+          renderAlertsSection(allAlerts) +
+          '</div>';
+      }
+    }
+
+    // ===== ملء مؤشرات الإنتاج =====
+    var prodKPIsEl = document.getElementById('productionKPIsContainer');
+    if (prodKPIsEl) {
+      var prodHtml = renderProductionKPIs();
+      if (prodHtml) {
+        prodKPIsEl.innerHTML =
+          '<div style="width:100%;margin-bottom:4px">' +
+          '<span style="font-size:13px;font-weight:600;color:var(--text-muted)">📊 مؤشرات الإنتاج — الشهر الحالي</span>' +
+          '</div>' + prodHtml;
+      }
+    }
 
     // Sales chart
     const chartData = d.charts.monthly_sales;
