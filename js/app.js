@@ -184,6 +184,8 @@ async function initApp() {
 
   // Show dashboard
   showPage('dashboard');
+  initMobileMenu();
+  convertTablesToCards();
 }
 
 async function checkDelayedShipments() {
@@ -371,6 +373,8 @@ function showPage(pageName) {
 
   if (renders[pageName]) renders[pageName]();
   else content.innerHTML = `<div class="empty-state"><div class="empty-icon">🚧</div><h3>قريباً</h3></div>`;
+  // انتظار انتهاء رسم الصفحة قبل تحويل الجداول
+  setTimeout(convertTablesToCards, 350);
 }
 
 // ===== REAL-TIME REFRESH =====
@@ -418,11 +422,76 @@ function toggleSidebar() {
   const isMobile = window.innerWidth <= 768;
   if (isMobile) {
     sidebar.classList.toggle('mobile-open');
-    const overlay = document.getElementById('sidebar-overlay');
+    const overlay = document.getElementById('sidebarOverlay');
     if (overlay) overlay.classList.toggle('active', sidebar.classList.contains('mobile-open'));
   } else {
     sidebar.classList.toggle('collapsed');
   }
+}
+
+// ===== تهيئة قائمة الموبايل =====
+function initMobileMenu() {
+  const btn     = document.getElementById('hamburgerBtn');
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (!btn || !sidebar || btn.dataset.mobileMenuInit) return;
+  btn.dataset.mobileMenuInit = 'true';
+
+  btn.addEventListener('click', () => {
+    const open = sidebar.classList.toggle('open');
+    overlay.classList.toggle('active', open);
+    btn.classList.toggle('open', open);
+    document.body.style.overflow = open ? 'hidden' : '';
+  });
+
+  if (overlay) {
+    overlay.addEventListener('click', closeMobileMenu);
+  }
+
+  document.querySelectorAll('.nav-item').forEach(link => {
+    link.addEventListener('click', () => {
+      if (window.innerWidth < 768) closeMobileMenu();
+    });
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeMobileMenu();
+  });
+}
+
+function closeMobileMenu() {
+  document.getElementById('sidebar')?.classList.remove('open');
+  document.getElementById('sidebarOverlay')?.classList.remove('active');
+  document.getElementById('hamburgerBtn')?.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// ===== تحويل الجداول لبطاقات على الموبايل =====
+function convertTablesToCards() {
+  if (window.innerWidth >= 768) return;
+  document.querySelectorAll('.data-table').forEach(table => {
+    if (table.dataset.mobileConverted) return;
+    const headers = [...table.querySelectorAll('thead th')]
+                      .map(th => th.textContent.trim());
+    const wrap = document.createElement('div');
+    wrap.className = 'table-card-container';
+    table.querySelectorAll('tbody tr').forEach(row => {
+      const card = document.createElement('div');
+      card.className = 'table-card';
+      [...row.querySelectorAll('td')].forEach((cell, i) => {
+        if (!headers[i]) return;
+        const div = document.createElement('div');
+        div.className = 'table-card-row';
+        div.innerHTML =
+          `<span class="table-card-label">${headers[i]}</span>` +
+          `<span class="table-card-value">${cell.innerHTML}</span>`;
+        card.appendChild(div);
+      });
+      wrap.appendChild(card);
+    });
+    table.insertAdjacentElement('afterend', wrap);
+    table.dataset.mobileConverted = 'true';
+  });
 }
 
 // ===== MODAL =====
@@ -586,9 +655,6 @@ window.addEventListener('load', () => {
     }
   } catch (_) {}
 
-  // ربط زر القائمة للهاتف المحمول
-  const hamburgerBtn = document.getElementById('hamburgerBtn');
-  if (hamburgerBtn) hamburgerBtn.addEventListener('click', toggleSidebar);
 });
 
 // إعادة ضبط جميع البيانات بعد تأكيد المستخدم
