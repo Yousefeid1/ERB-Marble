@@ -1276,3 +1276,144 @@ tbody td {
     gap: 12px;
   }
 }
+
+/* ===== زر الهامبرجر ===== */
+.hamburger-btn {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.hamburger-btn span {
+  display: block;
+  width: 24px;
+  height: 2px;
+  background: var(--text-primary);
+  border-radius: 2px;
+  transition: all .3s;
+}
+.hamburger-btn.open span:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+.hamburger-btn.open span:nth-child(2) { opacity: 0; }
+.hamburger-btn.open span:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* ===== Overlay ===== */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 998;
+}
+.sidebar-overlay.active { display: block; }
+
+/* ===== تابلت 768–1024 ===== */
+@media (max-width: 1024px) and (min-width: 768px) {
+  .sidebar { width: 64px; overflow: hidden; transition: width .3s; }
+  .sidebar:hover { width: var(--sidebar-width, 240px); }
+  .sidebar .nav-text { opacity: 0; transition: opacity .2s; white-space: nowrap; }
+  .sidebar:hover .nav-text { opacity: 1; }
+  .sidebar .logo-text { display: none; }
+  .sidebar:hover .logo-text { display: block; }
+  .main-content { margin-right: 64px !important; }
+  .form-row { display: grid !important; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .data-table th:nth-child(n+5),
+  .data-table td:nth-child(n+5) { display: none; }
+}
+
+/* ===== موبايل أقل من 768px ===== */
+@media (max-width: 767px) {
+  .hamburger-btn { display: flex !important; }
+
+  .sidebar {
+    position: fixed !important;
+    top: 0;
+    right: -100% !important;
+    width: 280px !important;
+    height: 100vh;
+    z-index: 999;
+    transition: right .3s ease;
+    overflow-y: auto;
+    margin: 0 !important;
+  }
+  .sidebar.open { right: 0 !important; }
+
+  .main-content {
+    margin-right: 0 !important;
+    padding: 12px !important;
+  }
+
+  .data-table { display: none !important; }
+  .table-card-container {
+    display: flex !important;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .table-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 14px;
+  }
+  .table-card-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 13px;
+    gap: 8px;
+  }
+  .table-card-row:last-child { border-bottom: none; }
+  .table-card-label {
+    color: var(--text-secondary);
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .table-card-value {
+    color: var(--text-primary);
+    text-align: left;
+    word-break: break-word;
+  }
+
+  .form-row { flex-direction: column !important; }
+  .form-group { width: 100% !important; }
+
+  .modal-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 100dvh !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+  }
+  .modal { align-items: flex-start !important; padding: 0 !important; }
+
+  .kpi-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+
+  .page-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px;
+  }
+  .page-header .btn { width: 100%; }
+
+  .btn-group { flex-direction: column; }
+  .btn-group .btn { width: 100%; }
+
+  .table-scroll-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ===== بطاقات الجداول — مخفية على الديسكتوب ===== */
+.table-card-container { display: none; }
