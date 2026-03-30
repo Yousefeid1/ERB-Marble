@@ -268,6 +268,9 @@ async function initApp() {
   loadNotifications();
   setInterval(loadNotifications, 60000);
 
+  // فحص النسخ الاحتياطي التلقائي
+  autoBackupCheck();
+
   // Show dashboard
   showPage('dashboard');
   initMobileMenu();
@@ -302,6 +305,30 @@ async function loadNotifications() {
     const unread = notifs.filter(n => !n.is_read).length;
     document.getElementById('notif-count').textContent = unread;
   } catch(e) {}
+}
+
+// فحص وإنشاء نسخة احتياطية تلقائية يومية
+function autoBackupCheck() {
+  const last = localStorage.getItem('_lastBackup');
+  const daysSinceLast = last
+    ? Math.floor((new Date() - new Date(last)) / 86400000)
+    : Infinity;
+  if (!last || daysSinceLast > 1) {
+    // حفظ snapshot تلقائي من البيانات الأساسية
+    const snap = {};
+    ['customers','sales','purchases','payments','blocks','slabs']
+      .forEach(k => {
+        const v = localStorage.getItem(k);
+        if (v) snap[k] = v;
+      });
+    localStorage.setItem('_autoSnapshot', JSON.stringify({
+      date: new Date().toISOString(), data: snap
+    }));
+    toast(
+      'لم يتم عمل نسخة احتياطية منذ أكثر من يوم ⚠️',
+      'warning'
+    );
+  }
 }
 
 // ===== SIDEBAR ROLE FILTER =====

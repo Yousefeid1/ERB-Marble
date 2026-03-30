@@ -502,7 +502,7 @@ const api = {
   async createSale(d) {
     const id  = DB.nextId('sales');
     const num = `INV-${new Date().getFullYear()}-${String(id).padStart(3, '0')}`;
-    const sale = DB.save('sales', { ...d, id, invoice_number: num, paid_amount: d.paid_amount || 0, status: d.status || 'draft' });
+    const sale = DB.save('sales', attachExchangeRate({ ...d, id, invoice_number: num, paid_amount: d.paid_amount || 0, status: d.status || 'draft' }));
     this.logActivity('create', 'sale', id, `فاتورة مبيعات: ${num} - ${d.customer}`);
     return sale;
   },
@@ -555,7 +555,7 @@ const api = {
   async createPurchase(d) {
     const id  = DB.nextId('purchases');
     const num = `PUR-${new Date().getFullYear()}-${String(id).padStart(3, '0')}`;
-    const pur = DB.save('purchases', { ...d, id, invoice_number: num, paid_amount: d.paid_amount || 0, status: d.status || 'draft' });
+    const pur = DB.save('purchases', attachExchangeRate({ ...d, id, invoice_number: num, paid_amount: d.paid_amount || 0, status: d.status || 'draft' }));
     this.logActivity('create', 'purchase', id, `فاتورة شراء: ${num} - ${d.supplier}`);
     return pur;
   },
@@ -961,3 +961,45 @@ const api = {
     return p;
   },
 };
+
+// ===== سجل أسعار الصرف التاريخي =====
+
+// توليد معرف فريد بسيط
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
+}
+
+// حفظ سعر صرف جديد مع تاريخه
+function saveExchangeRate(currency, rate, date) {
+  date = date || new Date().toISOString();
+  const rates = JSON.parse(
+    localStorage.getItem('exchange_rates') || '[]'
+  );
+  rates.push({
+    id: generateId(), currency, rate: parseFloat(rate), date
+  });
+  localStorage.setItem('exchange_rates', JSON.stringify(rates));
+}
+
+// الحصول على سعر الصرف في تاريخ معين
+function getExchangeRateAtDate(currency, date) {
+  const rates  = JSON.parse(
+    localStorage.getItem('exchange_rates') || '[]'
+  );
+  const target = new Date(date);
+  const match  = rates
+    .filter(r => r.currency === currency && new Date(r.date) <= target)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  if (match.length) return match[0].rate;
+  const s = JSON.parse(localStorage.getItem('settings') || '{}');
+  return s.exchangeRate || 31;
+}
+
+// إرفاق لقطة سعر الصرف الحالي بمستند (فاتورة مبيعات أو مشتريات)
+function attachExchangeRate(doc) {
+  const s = JSON.parse(localStorage.getItem('settings') || '{}');
+  return Object.assign({}, doc, {
+    exchangeRateSnapshot: s.exchangeRate || 31,
+    rateDate: new Date().toISOString()
+  });
+}

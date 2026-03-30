@@ -389,7 +389,69 @@ async function renderSettings() {
         <p style="color:var(--text-secondary);margin-bottom:12px">حذف جميع البيانات المحفوظة وإعادة البيانات التجريبية الافتراضية</p>
         <button class="btn btn-danger" onclick="resetAllData()">⚠ إعادة تعيين جميع البيانات</button>
       </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">💾 النسخ الاحتياطي والاستعادة</span></div>
+        <div class="settings-section" style="margin-top:8px">
+          <div id="lastBackupInfo" style="
+            background:var(--bg-secondary);border:1px solid var(--border-color);
+            border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;
+            display:flex;justify-content:space-between;align-items:center">
+            <span>آخر نسخة احتياطية:</span>
+            <strong id="lastBackupDate">لم يتم بعد</strong>
+          </div>
+
+          <div id="storageBar" style="margin-bottom:16px"></div>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="exportFullBackup()">
+              تصدير نسخة احتياطية (.json)
+            </button>
+            <label class="btn btn-secondary"
+                   style="cursor:pointer;margin:0" data-backup-restore>
+              استعادة من ملف
+              <input type="file" accept=".json" style="display:none"
+                     onchange="importBackup(this.files[0])">
+            </label>
+            <button class="btn btn-ghost" onclick="restoreAutoSnapshot()">
+              استعادة آخر snapshot
+            </button>
+          </div>
+
+          <hr style="margin:24px 0;border:none;border-top:1px solid var(--border-color)">
+
+          <h3 style="margin-bottom:16px">سجل أسعار الصرف</h3>
+          <div class="form-row" style="margin-bottom:12px">
+            <div class="form-group">
+              <label>العملة</label>
+              <select id="newRateCurrency" class="form-control">
+                <option value="USD">دولار USD</option>
+                <option value="EUR">يورو EUR</option>
+                <option value="GBP">إسترليني GBP</option>
+                <option value="SAR">ريال SAR</option>
+                <option value="AED">درهم AED</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>السعر (جنيه)</label>
+              <input type="number" id="newRateValue" class="form-control"
+                     step="0.01" placeholder="مثال: 48.5">
+            </div>
+            <div class="form-group">
+              <label>التاريخ</label>
+              <input type="date" id="newRateDate" class="form-control">
+            </div>
+          </div>
+          <button class="btn btn-secondary" onclick="addNewExchangeRate()">
+            إضافة سعر صرف
+          </button>
+          <div id="rateHistoryTable" style="margin-top:16px"></div>
+        </div>
+      </div>
     `;
+    // تحديث واجهة النسخ الاحتياطي وجدول أسعار الصرف بعد رسم الصفحة
+    updateBackupUI();
+    renderRateHistory();
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">${e.message}</p></div>`;
   }
@@ -505,4 +567,145 @@ function exportProductsExcel() {
   const headers = ['الكود','المنتج','الفئة','الوحدة','سعر الكلفة (EGP)','سعر البيع (EGP)','المخزون','الحد الأدنى'];
   const rows = products.map(p=>[p.code,p.name,p.category,p.unit,p.cost||0,p.price||0,p.stock_qty,p.min_stock]);
   exportGenericExcel({ sheetName:'المنتجات', headers, rows, filename:`products-${new Date().toISOString().split('T')[0]}.xlsx` });
+}
+
+// ===== دوال النسخ الاحتياطي والاستعادة =====
+
+// تصدير نسخة احتياطية كاملة من جميع البيانات
+function exportFullBackup() {
+  const keys = [
+    'settings','employees','customers','suppliers','products',
+    'sales','sale_items','purchases','purchase_items','payments',
+    'expenses','blocks','slabs','cutting','accounts','journal',
+    'journal_lines','quotations','warehouses','shipments',
+    'activity_log','notifications','manufacturing','cost_centers',
+    'export_orders','quality_data','crm_interactions',
+    'checks','recurring_entries','exchange_rates'
+  ];
+  const backup = {
+    version:   '2.0',
+    createdAt: new Date().toISOString(),
+    system:    'ERP الرخام والجرانيت',
+    data:      {}
+  };
+  keys.forEach(k => {
+    const v = localStorage.getItem(k);
+    if (v) {
+      try { backup.data[k] = JSON.parse(v); }
+      catch { backup.data[k] = v; }
+    }
+  });
+  const blob = new Blob(
+    [JSON.stringify(backup, null, 2)],
+    { type: 'application/json' }
+  );
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = 'erp-backup-' +
+               new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  localStorage.setItem('_lastBackup', new Date().toISOString());
+  toast('تم تصدير النسخة الاحتياطية ✓', 'success');
+  api.logActivity('backup', 'system', 0, 'تصدير نسخة احتياطية كاملة');
+  updateBackupUI();
+}
+
+// استعادة البيانات من ملف نسخة احتياطية
+function importBackup(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const b = JSON.parse(e.target.result);
+      if (!b.version || !b.data) {
+        toast('ملف غير صالح', 'error'); return;
+      }
+      if (confirm(
+        'استعادة نسخة بتاريخ ' + (b.createdAt||'').slice(0,10) +
+        '؟\nسيتم استبدال جميع البيانات الحالية.'
+      )) {
+        Object.entries(b.data).forEach(([k,v]) =>
+          localStorage.setItem(k, JSON.stringify(v))
+        );
+        toast('تمت الاستعادة ✓ — جاري إعادة التشغيل', 'success');
+        setTimeout(() => location.reload(), 1500);
+      }
+    } catch { toast('تعذر قراءة الملف', 'error'); }
+  };
+  reader.readAsText(file);
+}
+
+// استعادة آخر snapshot تلقائي
+function restoreAutoSnapshot() {
+  const raw = localStorage.getItem('_autoSnapshot');
+  if (!raw) { toast('لا توجد نسخة تلقائية', 'info'); return; }
+  const snap = JSON.parse(raw);
+  if (confirm(
+    'استعادة snapshot تلقائي بتاريخ ' +
+    (snap.date||'').slice(0,16) + '؟'
+  )) {
+    Object.entries(snap.data||{}).forEach(([k,v]) =>
+      localStorage.setItem(k, v)
+    );
+    toast('تمت الاستعادة ✓', 'success');
+    setTimeout(() => location.reload(), 1000);
+  }
+}
+
+// تحديث واجهة النسخ الاحتياطي (آخر نسخة + شريط التخزين)
+function updateBackupUI() {
+  const last = localStorage.getItem('_lastBackup');
+  const el   = document.getElementById('lastBackupDate');
+  if (el) el.textContent = last ? formatDate(last) : 'لم يتم بعد';
+
+  let total = 0;
+  for (let k in localStorage) {
+    if (Object.prototype.hasOwnProperty.call(localStorage, k))
+      total += (localStorage.getItem(k)||'').length * 2;
+  }
+  const mb  = (total / 1024 / 1024).toFixed(2);
+  const pct = Math.min((mb / 10) * 100, 100).toFixed(0);
+  const col = pct > 80 ? '#e24b4a' : pct > 60 ? '#ba7517' : '#1d9e75';
+  const bar = document.getElementById('storageBar');
+  if (bar) bar.innerHTML =
+    '<div style="background:var(--bg-secondary);border-radius:8px;overflow:hidden;height:8px;margin-bottom:4px">' +
+    '<div style="height:100%;width:' + pct + '%;background:' + col + ';transition:width 0.3s"></div>' +
+    '</div>' +
+    '<small style="color:var(--text-secondary)">' + mb + ' MB مستخدم من ~10 MB (' + pct + '%)</small>' +
+    (pct > 80 ?
+      '<p style="color:#e24b4a;margin-top:4px;font-size:12px">⚠️ التخزين على وشك الامتلاء</p>' : '');
+}
+
+// إضافة سعر صرف جديد من نموذج الإعدادات
+function addNewExchangeRate() {
+  const cur  = document.getElementById('newRateCurrency')?.value;
+  const rate = document.getElementById('newRateValue')?.value;
+  const date = document.getElementById('newRateDate')?.value;
+  if (!cur || !rate) { toast('يرجى إدخال العملة والسعر', 'warning'); return; }
+  saveExchangeRate(cur, parseFloat(rate), date || new Date().toISOString());
+  toast('تم حفظ سعر الصرف ✓', 'success');
+  renderRateHistory();
+}
+
+// عرض جدول سجل أسعار الصرف
+function renderRateHistory() {
+  const rates = JSON.parse(localStorage.getItem('exchange_rates')||'[]')
+    .sort((a,b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 15);
+  const el = document.getElementById('rateHistoryTable');
+  if (!el) return;
+  if (!rates.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:20px;text-align:center;color:var(--text-muted)">لا توجد أسعار مسجلة</div>';
+    return;
+  }
+  el.innerHTML =
+    '<table><thead><tr>' +
+    '<th>العملة</th><th>السعر</th><th>التاريخ</th>' +
+    '</tr></thead><tbody>' +
+    rates.map(r =>
+      '<tr><td>' + r.currency + '</td>' +
+      '<td>' + r.rate + ' ج.م</td>' +
+      '<td>' + formatDate(r.date) + '</td></tr>'
+    ).join('') +
+    '</tbody></table>';
 }
