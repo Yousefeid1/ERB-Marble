@@ -333,12 +333,66 @@ const DB = {
 DB.init();
 DB._initChannel();
 
+// ===== فحص سلامة البيانات =====
+function checkDataIntegrity() {
+  const keys = [
+    'settings','employees','customers','suppliers','products',
+    'sales','purchases','payments','expenses','blocks',
+    'slabs','accounts','journal','warehouses','shipments'
+  ];
+  const corrupted = [];
+  keys.forEach(key => {
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    try {
+      const v = JSON.parse(raw);
+      if (v === null || (!Array.isArray(v) && typeof v !== 'object')) corrupted.push(key);
+    } catch { corrupted.push(key); }
+  });
+
+  if (corrupted.length === 0) return true;
+
+  // عرض رسالة الخطأ فوق المحتوى الحالي
+  const div = document.createElement('div');
+  div.style.cssText = `
+    position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;
+    display:flex;align-items:center;justify-content:center;
+    direction:rtl;font-family:Cairo,sans-serif`;
+  div.innerHTML = `
+    <div style="background:var(--bg-primary,#fff);border-radius:16px;
+                padding:28px;max-width:420px;width:90%;text-align:center">
+      <div style="font-size:40px;margin-bottom:12px">⚠️</div>
+      <h3 style="color:#a32d2d;margin-bottom:10px">تلف في البيانات</h3>
+      <p style="color:#555;margin-bottom:8px">
+        تم اكتشاف تلف في: <strong>${corrupted.join(' ، ')}</strong>
+      </p>
+      <p style="color:#888;font-size:13px;margin-bottom:20px">
+        يُنصح باستعادة نسخة احتياطية قبل المتابعة
+      </p>
+      <div style="display:flex;gap:10px;justify-content:center">
+        <button onclick="document.querySelector('[data-backup-restore]')?.click();
+                         this.closest('div[style*=fixed]').remove()"
+                style="padding:10px 18px;background:#185fa5;color:#fff;
+                       border:none;border-radius:8px;cursor:pointer">
+          استعادة نسخة احتياطية
+        </button>
+        <button onclick="this.closest('div[style*=fixed]').remove()"
+                style="padding:10px 18px;background:#888;color:#fff;
+                       border:none;border-radius:8px;cursor:pointer">
+          تجاهل والمتابعة
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(div);
+  return false;
+}
+
 // ===== MOCK API =====
 const api = {
   token: sessionStorage.getItem('marble_token') || localStorage.getItem('marble_token'),
 
   setToken(t)  { this.token = t; sessionStorage.setItem('marble_token', t); },
-  clearToken() { this.token = null; sessionStorage.removeItem('marble_token'); sessionStorage.removeItem('marble_user'); localStorage.removeItem('marble_token'); localStorage.removeItem('marble_user'); },
+  clearToken() { this.token = null; sessionStorage.removeItem('marble_token'); sessionStorage.removeItem('marble_user'); sessionStorage.removeItem('_xt'); localStorage.removeItem('marble_token'); localStorage.removeItem('marble_user'); },
 
   // ===== AUTH =====
   async login(email, password) {

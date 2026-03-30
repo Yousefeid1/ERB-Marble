@@ -2,6 +2,26 @@
 // Main App Controller
 // ============================================
 
+// ===== معالج الأخطاء العام =====
+window.onerror = function(msg, src, line, col, err) {
+  console.error('خطأ في النظام:', msg, 'في', src, 'سطر', line);
+  showToast('حدث خطأ غير متوقع — تم تسجيله تلقائياً', 'error');
+  const errors = JSON.parse(localStorage.getItem('_errorLog') || '[]');
+  errors.unshift({
+    msg, src, line,
+    stack: err?.stack,
+    time:  new Date().toISOString()
+  });
+  localStorage.setItem('_errorLog', JSON.stringify(errors.slice(0, 50)));
+  return true;
+};
+
+window.addEventListener('unhandledrejection', e => {
+  console.error('خطأ في Promise:', e.reason);
+  showToast('حدث خطأ في العملية — يرجى المحاولة مرة أخرى', 'error');
+  e.preventDefault();
+});
+
 let currentUser = null;
 
 // ===== تشفير التوكن بـ XOR =====
@@ -74,6 +94,69 @@ document.addEventListener('keypress', _resetActivityTimer, { passive: true });
 // فحص عدم النشاط كل دقيقة
 setInterval(_checkInactivity, 60000);
 
+// ===== أمان التوكن المحسّن =====
+const _TK = '_xt';
+const _TOKEN_EXPIRY_MS = 8 * 60 * 60 * 1000; // 8 ساعات
+const _key = () => (navigator.userAgent.length * 7 + screen.width).toString(16);
+
+// حفظ التوكن مشفراً مع بيانات انتهاء الصلاحية
+function saveToken(token) {
+  const encrypted = token.split('').map((c, i) => {
+    const k = _key();
+    return String.fromCharCode(
+      c.charCodeAt(0) ^ k.charCodeAt(i % k.length)
+    );
+  }).join('').split('').map(c =>
+    c.charCodeAt(0).toString(16).padStart(2, '0')
+  ).join('');
+
+  sessionStorage.setItem(_TK, JSON.stringify({
+    t:    encrypted,
+    exp:  Date.now() + _TOKEN_EXPIRY_MS,
+    last: Date.now()
+  }));
+}
+
+// قراءة التوكن مع التحقق من الصلاحية
+function getToken() {
+  try {
+    const raw = sessionStorage.getItem(_TK);
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    if (Date.now() > p.exp ||
+        Date.now() - p.last > _TOKEN_EXPIRY_MS) {
+      sessionStorage.removeItem(_TK);
+      showToast('انتهت جلستك — يرجى تسجيل الدخول مجدداً', 'warning');
+      return null;
+    }
+    p.last = Date.now();
+    sessionStorage.setItem(_TK, JSON.stringify(p));
+    const k = _key();
+    return p.t.match(/.{2}/g)
+      .map(h => String.fromCharCode(parseInt(h, 16)))
+      .map((c, i) => String.fromCharCode(
+        c.charCodeAt(0) ^ k.charCodeAt(i % k.length)
+      )).join('');
+  } catch { return null; }
+}
+
+// تحديث النشاط عند أي تفاعل مستخدم (بحد أقصى مرة في الدقيقة)
+let _lastActivityUpdate = 0;
+['click', 'keypress', 'touchstart'].forEach(ev => {
+  document.addEventListener(ev, () => {
+    const now = Date.now();
+    if (now - _lastActivityUpdate < 60000) return;
+    _lastActivityUpdate = now;
+    const raw = sessionStorage.getItem(_TK);
+    if (!raw) return;
+    try {
+      const p = JSON.parse(raw);
+      p.last = now;
+      sessionStorage.setItem(_TK, JSON.stringify(p));
+    } catch {}
+  }, { passive: true });
+});
+
 // ===== حد محاولات تسجيل الدخول =====
 const LOGIN_RATE_LIMIT = {
   max: 5,
@@ -135,7 +218,7 @@ async function doLogin() {
     LOGIN_RATE_LIMIT.reset();
     // حفظ التوكن بشكل مشفر وتسجيل وقت آخر نشاط
     api.token = data.token;
-    _storeToken(data.token);
+    saveToken(data.token);
     _resetActivityTimer();
     currentUser = data.user;
     sessionStorage.setItem('marble_user', JSON.stringify(data.user));
@@ -160,6 +243,9 @@ function doLogout() {
 
 // ===== INIT =====
 async function initApp() {
+  // فحص سلامة بيانات localStorage عند بدء التطبيق
+  checkDataIntegrity();
+
   // Set user info in UI
   const name = currentUser?.name || 'مستخدم';
   const role = currentUser?.role || '';
@@ -371,7 +457,10 @@ function showPage(pageName) {
     'recurring-entries': renderRecurringEntries,
   };
 
-  if (renders[pageName]) renders[pageName]();
+  if (renders[pageName]) {
+    try { renders[pageName](); }
+    catch(err) { console.error(err); showPageError(pageName, err.message); }
+  }
   else content.innerHTML = `<div class="empty-state"><div class="empty-icon">🚧</div><h3>قريباً</h3></div>`;
   // انتظار انتهاء رسم الصفحة قبل تحويل الجداول
   setTimeout(convertTablesToCards, 350);
@@ -516,6 +605,29 @@ function toast(msg, type = 'success') {
   setTimeout(() => el.remove(), 4000);
 }
 
+// واجهة موحدة لعرض الإشعارات
+function showToast(msg, type = 'success') { toast(msg, type); }
+
+// ===== عرض خطأ تحميل الصفحة =====
+function showPageError(pageName, msg) {
+  const container = document.getElementById('page-content')
+                 || document.getElementById('pageContainer')
+                 || document.querySelector('.main-content');
+  if (!container) return;
+  container.innerHTML = `
+    <div style="text-align:center;padding:60px 20px;direction:rtl">
+      <div style="font-size:48px;margin-bottom:16px">⚠️</div>
+      <h3 style="color:var(--text-primary);margin-bottom:8px">
+        تعذر تحميل الصفحة
+      </h3>
+      <p style="color:var(--text-secondary);margin-bottom:24px">${msg}</p>
+      <button class="btn btn-primary"
+              onclick="showPage('${pageName}')">
+        إعادة المحاولة
+      </button>
+    </div>`;
+}
+
 // ===== HELPERS =====
 function formatMoney(n, currency = 'EGP') {
   const amount = parseFloat(n || 0).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -605,37 +717,25 @@ window.addEventListener('load', () => {
   }
 
   // ===== التحقق من التوكن المشفر وانتهاء صلاحيته =====
-  const encToken = sessionStorage.getItem('marble_token');
-  const tokenTs  = parseInt(sessionStorage.getItem('marble_token_ts') || '0');
-  const user     = sessionStorage.getItem('marble_user') || localStorage.getItem('marble_user');
+  const token = getToken();
+  const user  = sessionStorage.getItem('marble_user') || localStorage.getItem('marble_user');
 
-  // فك تشفير التوكن
-  const token = encToken ? _decToken(encToken) : (localStorage.getItem('marble_token') || null);
-
-  // التحقق من انتهاء الصلاحية (8 ساعات)
-  const isExpired = tokenTs && (Date.now() - tokenTs) > INACTIVITY_LIMIT;
-
-  if (token && user && !isExpired) {
+  if (token && user) {
     api.token = token;
     currentUser = JSON.parse(user);
     // ترحيل إلى sessionStorage إن كانت البيانات في localStorage فقط
     if (!sessionStorage.getItem('marble_user')) sessionStorage.setItem('marble_user', user);
-    // ضمان حفظ التوكن بشكل مشفر
-    if (!encToken) _storeToken(token);
     _resetActivityTimer();
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
     initApp();
-  } else if (isExpired) {
-    // حذف بيانات الجلسة المنتهية الصلاحية
+  } else if (!token && sessionStorage.getItem(_TK) === null) {
+    // تنظيف أي توكنات قديمة من الجلسات السابقة
     sessionStorage.removeItem('marble_token');
     sessionStorage.removeItem('marble_token_ts');
-    sessionStorage.removeItem('marble_user');
     sessionStorage.removeItem('marble_last_activity');
     localStorage.removeItem('marble_token');
     localStorage.removeItem('marble_user');
-    const errEl = document.getElementById('login-error');
-    if (errEl) errEl.textContent = 'انتهت صلاحية الجلسة. يرجى تسجيل الدخول مجدداً.';
   }
 
   // ===== REAL-TIME SYNC (BroadcastChannel) =====
