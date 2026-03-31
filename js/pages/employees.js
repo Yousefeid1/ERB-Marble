@@ -50,7 +50,7 @@ async function renderEmployees() {
           <table>
             <thead><tr>
               <th>الاسم</th><th>البريد الإلكتروني</th><th>الدور الوظيفي</th>
-              <th>القسم</th><th>الهاتف</th><th>الراتب</th><th>حالة العمل</th><th>إجراءات</th>
+              <th>القسم</th><th>الهاتف</th><th>الراتب</th><th>العمولة %</th><th>حالة العمل</th><th>إجراءات</th>
             </tr></thead>
             <tbody id="emp-tbody">${renderEmployeeRows(users)}</tbody>
           </table>
@@ -64,7 +64,7 @@ async function renderEmployees() {
 }
 
 function renderEmployeeRows(users) {
-  if (!users.length) return `<tr><td colspan="8"><div class="empty-state" style="padding:40px"><div class="empty-icon">👥</div><h3>لا يوجد موظفون</h3></div></td></tr>`;
+  if (!users.length) return `<tr><td colspan="9"><div class="empty-state" style="padding:40px"><div class="empty-icon">👥</div><h3>لا يوجد موظفون</h3></div></td></tr>`;
   return users.map(u => {
     const ws = u.work_status || 'active';
     const [wsCls, wsLabel] = WORK_STATUS_BADGE[ws] || ['badge-info', ws];
@@ -76,6 +76,7 @@ function renderEmployeeRows(users) {
       <td>${u.department || '-'}</td>
       <td>${u.phone || '-'}</td>
       <td class="number">${u.salary ? formatMoney(u.salary) : '-'}</td>
+      <td class="number">${u.commission_rate ? u.commission_rate + '%' : '-'}</td>
       <td><span class="badge ${wsCls}">${wsLabel}</span></td>
       <td style="display:flex;gap:4px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" onclick="openEditEmployeeModal(${u.id})">تعديل</button>
@@ -131,6 +132,10 @@ function openNewEmployeeModal() {
         <input type="number" id="nemp-salary" placeholder="0" min="0">
       </div>
       <div class="form-group">
+        <label>نسبة العمولة (%)</label>
+        <input type="number" id="nemp-commission" placeholder="0" min="0" max="100" step="0.5" title="نسبة مئوية من قيمة الفاتورة عند السداد">
+      </div>
+      <div class="form-group">
         <label>حالة العمل</label>
         <select id="nemp-workstatus">
           <option value="active">نشط</option>
@@ -182,6 +187,7 @@ async function saveNewEmployee() {
       phone:       document.getElementById('nemp-phone').value,
       national_id: document.getElementById('nemp-national').value,
       salary:      parseFloat(document.getElementById('nemp-salary').value) || 0,
+      commission_rate: parseFloat(document.getElementById('nemp-commission').value) || 0,
       work_status: document.getElementById('nemp-workstatus').value,
     });
     closeModal();
@@ -234,6 +240,10 @@ function openEditEmployeeModal(id) {
         <input type="number" id="eemp-salary" value="${u.salary || 0}" min="0">
       </div>
       <div class="form-group">
+        <label>نسبة العمولة (%)</label>
+        <input type="number" id="eemp-commission" value="${u.commission_rate || 0}" min="0" max="100" step="0.5">
+      </div>
+      <div class="form-group">
         <label>حالة العمل</label>
         <select id="eemp-workstatus" ${u.id === 1 ? 'disabled' : ''}>
           <option value="active"     ${(u.work_status||'active') === 'active'     ? 'selected':''}>نشط</option>
@@ -264,6 +274,7 @@ async function saveEditEmployee(id) {
     phone:       document.getElementById('eemp-phone').value,
     national_id: document.getElementById('eemp-national').value,
     salary:      parseFloat(document.getElementById('eemp-salary').value) || 0,
+    commission_rate: parseFloat(document.getElementById('eemp-commission').value) || 0,
     work_status: document.getElementById('eemp-workstatus').value,
     active:      document.getElementById('eemp-workstatus').value === 'active',
   };

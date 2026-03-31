@@ -233,12 +233,14 @@ const DB = {
     });
     if (shipsMigrated) this.set('shipments', _shipments);
 
-    // Migration: add currency to sales
+    // Migration: add currency / salesperson fields to sales
     const _sales = this.getAll('sales');
     let salesMigrated = false;
     _sales.forEach(s => {
       if (!('currency'          in s)) { s.currency          = 'EGP'; salesMigrated = true; }
       if (!('negotiated_price'  in s)) { s.negotiated_price  = null;  salesMigrated = true; }
+      if (!('salesperson_id'    in s)) { s.salesperson_id    = null;  salesMigrated = true; }
+      if (!('salesperson_name'  in s)) { s.salesperson_name  = '';    salesMigrated = true; }
     });
     if (salesMigrated) this.set('sales', _sales);
 
@@ -277,6 +279,7 @@ const DB = {
       if (!('national_id' in u)) { u.national_id = '';       usersMigrated = true; }
       if (!('salary'          in u)) { u.salary          = 0;     usersMigrated = true; }
       if (!('must_change_password' in u)) { u.must_change_password = false; usersMigrated = true; }
+      if (!('commission_rate' in u)) { u.commission_rate  = 0;     usersMigrated = true; }
       // Migrate role 'مدير' to 'مدير عام'
       if (u.role === 'مدير') { u.role = 'مدير عام'; usersMigrated = true; }
     });
@@ -289,6 +292,16 @@ const DB = {
         DB.save('users', { ...emp, id });
       }
     });
+    // Migration: add commissions collection if missing
+    if (!this.get('commissions')) this.set('commissions', []);
+    // Migration: add type/region to existing customers
+    const _customers = this.getAll('customers');
+    let custMigrated = false;
+    _customers.forEach(c => {
+      if (!('type'   in c)) { c.type   = '';  custMigrated = true; }
+      if (!('region' in c)) { c.region = '';  custMigrated = true; }
+    });
+    if (custMigrated) this.set('customers', _customers);
   },
   getAll(key) { return this.get(key) || []; },
   findById(key, id) { return this.getAll(key).find(i => i.id === parseInt(id)); },
@@ -543,9 +556,10 @@ const api = {
   // ===== SALES =====
   async sales(params = {}) {
     let items = DB.getAll('sales');
-    if (params.status)      items = items.filter(i => i.status === params.status);
-    if (params.customer_id) items = items.filter(i => i.customer_id === parseInt(params.customer_id));
-    if (params.search)      { const q = params.search.toLowerCase(); items = items.filter(i => i.invoice_number.toLowerCase().includes(q) || i.customer.toLowerCase().includes(q)); }
+    if (params.status)         items = items.filter(i => i.status === params.status);
+    if (params.customer_id)    items = items.filter(i => i.customer_id === parseInt(params.customer_id));
+    if (params.salesperson_id) items = items.filter(i => i.salesperson_id === parseInt(params.salesperson_id));
+    if (params.search)         { const q = params.search.toLowerCase(); items = items.filter(i => i.invoice_number.toLowerCase().includes(q) || i.customer.toLowerCase().includes(q)); }
     return { data: items.sort((a, b) => new Date(b.invoice_date) - new Date(a.invoice_date)) };
   },
   async saleDetail(id) { return DB.findById('sales', id); },
@@ -597,6 +611,10 @@ const api = {
     s.status = newStatus;
     DB.save('sales', s);
     this.logActivity('update', 'sale', parseInt(id), `تغيير حالة فاتورة ${s.invoice_number}: ${oldStatus} ← ${newStatus}`);
+    // Auto-calculate commission when sale becomes paid
+    if (newStatus === 'paid' && oldStatus !== 'paid') {
+      this._calcCommission(s);
+    }
     // Add notification for status change
     const notifMsg = `تم تغيير حالة الفاتورة ${s.invoice_number} (${s.customer}) إلى: ${{ draft:'مسودة', sent:'مرسلة', partial:'جزئي مدفوع', paid:'مدفوعة', cancelled:'ملغاة', rejected:'مرفوضة', pending_approval:'معلقة للموافقة' }[newStatus] || newStatus}`;
     DB.save('notifications', { id: DB.nextId('notifications'), title: 'تغيير حالة فاتورة', message: notifMsg, type: newStatus === 'paid' ? 'success' : newStatus === 'rejected' || newStatus === 'cancelled' ? 'danger' : 'warning', is_read: false, created_at: new Date().toISOString() });
@@ -619,7 +637,7 @@ const api = {
     if (params.search) { const q = params.search.toLowerCase(); items = items.filter(i => i.name.toLowerCase().includes(q)); }
     return items;
   },
-  async createCustomer(d)    { return DB.save('customers', { ...d, id: DB.nextId('customers'), balance: 0, created_at: new Date().toISOString().split('T')[0] }); },
+  async createCustomer(d)    { return DB.save('customers', { type: '', region: '', ...d, id: DB.nextId('customers'), balance: 0, created_at: new Date().toISOString().split('T')[0] }); },
   async updateCustomer(id, d){ return DB.save('customers', { ...DB.findById('customers', id), ...d, id: parseInt(id) }); },
 
   // ===== PURCHASES =====
@@ -1022,10 +1040,15 @@ const api = {
   updateSalePaid(id, addAmount) {
     const s = DB.findById('sales', id);
     if (!s) return;
+    const wasPaid = s.status === 'paid';
     s.paid_amount = Math.min((s.paid_amount || 0) + addAmount, s.total_amount);
     if (s.paid_amount >= s.total_amount)  s.status = 'paid';
     else if (s.paid_amount > 0)           s.status = 'partial';
     DB.save('sales', s);
+    // Auto-calculate commission when sale becomes fully paid
+    if (!wasPaid && s.status === 'paid') {
+      this._calcCommission(s);
+    }
     return s;
   },
   updatePurchasePaid(id, addAmount) {
@@ -1036,6 +1059,142 @@ const api = {
     else if (p.paid_amount > 0)           p.status = 'partial';
     DB.save('purchases', p);
     return p;
+  },
+
+  // ===== COMMISSION HELPERS =====
+  _calcCommission(sale) {
+    if (!sale.salesperson_id) return;
+    // Avoid duplicate commission for the same invoice
+    const existing = DB.getAll('commissions').find(c => c.sale_id === sale.id);
+    if (existing) return;
+    const sp = DB.findById('users', sale.salesperson_id);
+    const rate = parseFloat(sp?.commission_rate || 0);
+    if (rate <= 0) return;
+    const amount = parseFloat(((sale.total_amount || 0) * rate / 100).toFixed(2));
+    DB.save('commissions', {
+      id:               DB.nextId('commissions'),
+      sale_id:          sale.id,
+      invoice_number:   sale.invoice_number,
+      salesperson_id:   sale.salesperson_id,
+      salesperson_name: sale.salesperson_name || sp?.name || '',
+      customer:         sale.customer,
+      sale_amount:      sale.total_amount,
+      commission_rate:  rate,
+      commission_amount: amount,
+      status:           'pending',
+      created_at:       new Date().toISOString(),
+    });
+    DB.save('notifications', {
+      id: DB.nextId('notifications'),
+      title: 'عمولة جديدة',
+      message: `عمولة ${sale.salesperson_name || sp?.name || ''} على الفاتورة ${sale.invoice_number}: ${amount.toFixed(2)} EGP`,
+      type: 'success',
+      is_read: false,
+      created_at: new Date().toISOString(),
+    });
+  },
+
+  // ===== COMMISSIONS =====
+  async commissions(params = {}) {
+    let items = DB.getAll('commissions');
+    if (params.salesperson_id) items = items.filter(i => i.salesperson_id === parseInt(params.salesperson_id));
+    if (params.status)         items = items.filter(i => i.status === params.status);
+    return items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  },
+  async payCommission(id) {
+    const c = DB.findById('commissions', id);
+    if (!c) throw new Error('العمولة غير موجودة');
+    c.status = 'paid';
+    c.paid_at = new Date().toISOString();
+    DB.save('commissions', c);
+    this.logActivity('update', 'commission', parseInt(id), `صرف عمولة ${c.salesperson_name}: ${c.commission_amount}`);
+    return c;
+  },
+
+  // ===== SALES PERFORMANCE =====
+  async salesPerformance(params = {}) {
+    let sales = DB.getAll('sales').filter(s => s.status !== 'cancelled' && s.status !== 'rejected');
+    // Date range filter
+    if (params.date_from) sales = sales.filter(s => s.invoice_date >= params.date_from);
+    if (params.date_to)   sales = sales.filter(s => s.invoice_date <= params.date_to);
+
+    // By salesperson
+    const spMap = {};
+    sales.forEach(s => {
+      const key  = s.salesperson_id || 0;
+      const name = s.salesperson_name || (s.salesperson_id ? `موظف #${s.salesperson_id}` : 'بدون سيلز');
+      if (!spMap[key]) spMap[key] = { id: key, name, total: 0, paid: 0, count: 0 };
+      spMap[key].total += s.total_amount || 0;
+      spMap[key].paid  += s.paid_amount  || 0;
+      spMap[key].count++;
+    });
+    const bySalesperson = Object.values(spMap).sort((a, b) => b.total - a.total);
+
+    // Top products
+    const prodMap = {};
+    sales.forEach(s => (s.items || []).forEach(item => {
+      const k = item.product || item.product_id || 'غير محدد';
+      if (!prodMap[k]) prodMap[k] = { name: k, qty: 0, total: 0 };
+      prodMap[k].qty   += item.qty || 0;
+      prodMap[k].total += item.subtotal || 0;
+    }));
+    const topProducts = Object.values(prodMap).sort((a, b) => b.total - a.total).slice(0, 10);
+
+    // By region
+    const customers = DB.getAll('customers');
+    const regionMap = {};
+    sales.forEach(s => {
+      const cust   = customers.find(c => c.id === s.customer_id);
+      const region = cust?.region || 'غير محددة';
+      if (!regionMap[region]) regionMap[region] = { region, total: 0, count: 0 };
+      regionMap[region].total += s.total_amount || 0;
+      regionMap[region].count++;
+    });
+    const byRegion = Object.values(regionMap).sort((a, b) => b.total - a.total);
+
+    // By customer type
+    const typeMap = {};
+    sales.forEach(s => {
+      const cust = customers.find(c => c.id === s.customer_id);
+      const type = cust?.type || 'غير مصنف';
+      if (!typeMap[type]) typeMap[type] = { type, total: 0, count: 0 };
+      typeMap[type].total += s.total_amount || 0;
+      typeMap[type].count++;
+    });
+    const byCustomerType = Object.values(typeMap).sort((a, b) => b.total - a.total);
+
+    // Monthly trend
+    const monthMap = {};
+    sales.forEach(s => {
+      const d = new Date(s.invoice_date);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthMap[key]) monthMap[key] = { month: key, total: 0, count: 0 };
+      monthMap[key].total += s.total_amount || 0;
+      monthMap[key].count++;
+    });
+    const monthlyTrend = Object.values(monthMap).sort((a, b) => a.month.localeCompare(b.month)).slice(-12);
+
+    // Commission summary
+    const commissions = DB.getAll('commissions');
+    const commMap = {};
+    commissions.forEach(c => {
+      const k = c.salesperson_id || 0;
+      if (!commMap[k]) commMap[k] = { id: k, name: c.salesperson_name, pending: 0, paid: 0 };
+      if (c.status === 'paid') commMap[k].paid    += c.commission_amount;
+      else                     commMap[k].pending  += c.commission_amount;
+    });
+    const commissionSummary = Object.values(commMap);
+
+    return {
+      total_sales:    sales.reduce((s, i) => s + i.total_amount, 0),
+      total_count:    sales.length,
+      bySalesperson,
+      topProducts,
+      byRegion,
+      byCustomerType,
+      monthlyTrend,
+      commissionSummary,
+    };
   },
 };
 

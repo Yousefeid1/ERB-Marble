@@ -5,15 +5,35 @@
 // ===== SALES =====
 let _salesPage = 1;
 
+// Helper: is current user a salesperson (not a manager)
+function isSalespersonOnly() {
+  const role = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.role : '';
+  return role === 'موظف مبيعات';
+}
+
 async function renderSales(page) {
   if (page) _salesPage = page;
   const content = document.getElementById('page-content');
   try {
     const customers = await api.customers();
-    const { data: sales } = await api.sales();
+    const users     = await api.users();
+    const salespeople = users.filter(u => ['موظف مبيعات', 'مدير مبيعات'].includes(u.role));
+
+    // Salesperson sees only their own invoices
+    const salesParams = isSalespersonOnly()
+      ? { salesperson_id: currentUser.id }
+      : {};
+    const { data: sales } = await api.sales(salesParams);
 
     const paged = slicePage(sales, _salesPage);
     const pagination = renderPaginationBar(_salesPage, sales.length, 'renderSales');
+
+    // Salesperson filter (for managers only)
+    const spFilterHTML = !isSalespersonOnly() ? `
+      <select id="sales-sp-filter" onchange="filterSales()">
+        <option value="">كل السيلز</option>
+        ${salespeople.map(u => `<option value="${u.id}">${u.name}</option>`).join('')}
+      </select>` : '';
 
     content.innerHTML = `
       <div class="page-header">
@@ -39,6 +59,7 @@ async function renderSales(page) {
           <option value="cancelled">ملغاة</option>
           <option value="rejected">مرفوضة</option>
         </select>
+        ${spFilterHTML}
       </div>
 
       <div class="card" style="padding:0">
@@ -47,6 +68,7 @@ async function renderSales(page) {
             <thead><tr>
               <th>رقم الفاتورة</th>
               <th>العميل</th>
+              ${!isSalespersonOnly() ? '<th>السيلز</th>' : ''}
               <th>التاريخ</th>
               <th>تاريخ الاستحقاق</th>
               <th>الإجمالي</th>
@@ -68,6 +90,7 @@ async function renderSales(page) {
 
     window._salesData     = sales;
     window._customersData = customers;
+    window._salesUsersData = users;
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">${e.message}</p></div>`;
   }
@@ -83,12 +106,14 @@ function getDueDateClass(sale) {
 }
 
 function renderSalesRows(sales) {
-  if (!sales.length) return `<tr><td colspan="11"><div class="empty-state" style="padding:40px"><div class="empty-icon">🧾</div><h3>لا توجد فواتير</h3></div></td></tr>`;
+  if (!sales.length) return `<tr><td colspan="12"><div class="empty-state" style="padding:40px"><div class="empty-icon">🧾</div><h3>لا توجد فواتير</h3></div></td></tr>`;
   const canChangeStatus = canUserChangeInvoiceStatus();
+  const showSP = !isSalespersonOnly();
   return sales.map(s => `
     <tr>
       <td class="number"><strong>${s.invoice_number}</strong></td>
       <td>${buildNavLink(s.customer, 'customers', s.customer_id)}</td>
+      ${showSP ? `<td>${s.salesperson_name ? `<small>${s.salesperson_name}</small>` : '<span class="text-muted">-</span>'}</td>` : ''}
       <td>${formatDate(s.invoice_date)}</td>
       <td class="${getDueDateClass(s)}">${formatDate(s.due_date)}</td>
       <td class="number">${formatMoney(s.total_amount, s.currency || 'EGP')}</td>
@@ -113,7 +138,11 @@ function renderSalesRows(sales) {
 async function filterSales() {
   const search = document.getElementById('sales-search').value;
   const status = document.getElementById('sales-status-filter').value;
-  const { data } = await api.sales({ search, status });
+  const spId   = document.getElementById('sales-sp-filter')?.value || '';
+  const params = { search, status };
+  if (spId) params.salesperson_id = parseInt(spId);
+  if (isSalespersonOnly()) params.salesperson_id = currentUser.id;
+  const { data } = await api.sales(params);
   _salesPage = 1;
   window._salesData = data;
   _updateTableWithPagination('sales-tbody', renderSalesRows, data, 1, 'renderSales');
@@ -210,6 +239,21 @@ async function viewSaleDetail(id) {
 
 function openNewSaleModal() {
   const customers = window._customersData || [];
+  const users     = window._salesUsersData || [];
+  const salespeople = users.filter(u => ['موظف مبيعات', 'مدير مبيعات', 'مدير عام', 'مدير'].includes(u.role));
+  const isSP = isSalespersonOnly();
+
+  // For salesperson, pre-fill their own name; for manager, show dropdown
+  const spHTML = isSP
+    ? `<input type="hidden" id="ns-sp-id" value="${currentUser.id}">`
+    : `<div class="form-group">
+        <label>موظف المبيعات</label>
+        <select id="ns-sp-id">
+          <option value="">بدون تخصيص</option>
+          ${salespeople.map(u => `<option value="${u.id}">${u.name} (${u.role})</option>`).join('')}
+        </select>
+      </div>`;
+
   openModal('فاتورة مبيعات جديدة', `
     <div class="form-grid">
       <div class="form-group">
@@ -241,6 +285,7 @@ function openNewSaleModal() {
           <option value="USD">دولار (USD)</option>
         </select>
       </div>
+      ${spHTML}
     </div>
     <hr class="divider">
     <div id="ns-items">
@@ -314,16 +359,24 @@ async function saveSale() {
   if (!items.length) { toast('أضف بندًا واحدًا على الأقل', 'error'); return; }
   const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
   const tax      = subtotal * 0.14;
+
+  // Salesperson assignment
+  const spEl      = document.getElementById('ns-sp-id');
+  const spId      = spEl ? (parseInt(spEl.value) || null) : null;
+  const spName    = spId ? ((window._salesUsersData || []).find(u => u.id === spId)?.name || '') : '';
+
   await api.createSale({
-    customer_id:   parseInt(custEl.value),
-    customer:      custEl.options[custEl.selectedIndex].dataset.name,
-    invoice_date:  document.getElementById('ns-date').value,
-    due_date:      document.getElementById('ns-due').value,
-    status:        document.getElementById('ns-status').value,
-    currency:      document.getElementById('ns-currency')?.value || 'EGP',
+    customer_id:      parseInt(custEl.value),
+    customer:         custEl.options[custEl.selectedIndex].dataset.name,
+    invoice_date:     document.getElementById('ns-date').value,
+    due_date:         document.getElementById('ns-due').value,
+    status:           document.getElementById('ns-status').value,
+    currency:         document.getElementById('ns-currency')?.value || 'EGP',
     negotiated_price: isManager() && document.getElementById('ns-negotiated-price')?.value
       ? parseFloat(document.getElementById('ns-negotiated-price').value)
       : null,
+    salesperson_id:   spId,
+    salesperson_name: spName,
     items, subtotal, tax, total_amount: subtotal + tax, paid_amount: 0,
   });
   closeModal();
@@ -332,6 +385,8 @@ async function saveSale() {
 }
 
 // ===== CUSTOMERS =====
+const CUSTOMER_TYPES = ['', 'مقاولون', 'محلات', 'مشاريع', 'أفراد', 'شركات'];
+
 async function renderCustomers() {
   const content = document.getElementById('page-content');
   try {
@@ -347,11 +402,15 @@ async function renderCustomers() {
       </div>
       <div class="filters-bar">
         <input type="text" id="cust-search" placeholder="بحث باسم العميل..." oninput="filterCustomers()" style="flex:1">
+        <select id="cust-type-filter" onchange="filterCustomers()">
+          <option value="">كل التصنيفات</option>
+          ${CUSTOMER_TYPES.filter(Boolean).map(t => `<option value="${t}">${t}</option>`).join('')}
+        </select>
       </div>
       <div class="card" style="padding:0">
         <div class="data-table-wrapper">
           <table>
-            <thead><tr><th>الاسم</th><th>الهاتف</th><th>البريد الإلكتروني</th><th>العنوان</th><th>الرصيد المستحق</th><th>تاريخ الإنشاء</th></tr></thead>
+            <thead><tr><th>الاسم</th><th>التصنيف</th><th>المنطقة</th><th>الهاتف</th><th>البريد الإلكتروني</th><th>العنوان</th><th>الرصيد المستحق</th><th>تاريخ الإنشاء</th><th>إجراءات</th></tr></thead>
             <tbody id="cust-tbody">${renderCustomerRows(customers)}</tbody>
           </table>
         </div>
@@ -364,22 +423,30 @@ async function renderCustomers() {
 }
 
 function renderCustomerRows(customers) {
-  if (!customers.length) return `<tr><td colspan="6"><div class="empty-state" style="padding:30px"><div class="empty-icon">👤</div><h3>لا يوجد عملاء</h3></div></td></tr>`;
+  if (!customers.length) return `<tr><td colspan="9"><div class="empty-state" style="padding:30px"><div class="empty-icon">👤</div><h3>لا يوجد عملاء</h3></div></td></tr>`;
   return customers.map(c => `
     <tr>
       <td><strong>${c.name}</strong></td>
+      <td>${c.type ? `<span class="badge badge-info">${c.type}</span>` : '-'}</td>
+      <td>${c.region || '-'}</td>
       <td>${c.phone || '-'}</td>
       <td>${c.email || '-'}</td>
       <td>${c.address || '-'}</td>
       <td class="number ${c.balance > 0 ? 'text-danger' : 'text-success'}">${formatMoney(c.balance)}</td>
       <td>${formatDate(c.created_at)}</td>
+      <td>
+        <button class="btn btn-secondary btn-sm" onclick="openEditCustomerModal(${c.id})">تعديل</button>
+      </td>
     </tr>
   `).join('');
 }
 
 async function filterCustomers() {
-  const search    = document.getElementById('cust-search').value;
-  const customers = await api.customers({ search });
+  const search = document.getElementById('cust-search').value;
+  const type   = document.getElementById('cust-type-filter')?.value || '';
+  let customers = await api.customers({ search });
+  if (type) customers = customers.filter(c => c.type === type);
+  window._customersListData = customers;
   document.getElementById('cust-tbody').innerHTML = renderCustomerRows(customers);
 }
 
@@ -387,6 +454,13 @@ function openNewCustomerModal() {
   openModal('عميل جديد', `
     <div class="form-grid">
       <div class="form-group form-full"><label>اسم العميل *</label><input type="text" id="nc-name" placeholder="اسم الشركة أو الشخص"></div>
+      <div class="form-group">
+        <label>التصنيف</label>
+        <select id="nc-type">
+          ${CUSTOMER_TYPES.map(t => `<option value="${t}">${t || 'غير محدد'}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label>المنطقة / المحافظة</label><input type="text" id="nc-region" placeholder="القاهرة، الإسكندرية..."></div>
       <div class="form-group"><label>الهاتف</label><input type="text" id="nc-phone" placeholder="01xxxxxxxxx"></div>
       <div class="form-group"><label>البريد الإلكتروني</label><input type="email" id="nc-email" placeholder="email@example.com"></div>
       <div class="form-group form-full"><label>العنوان</label><input type="text" id="nc-address" placeholder="المدينة، المنطقة"></div>
@@ -397,10 +471,56 @@ function openNewCustomerModal() {
   `);
 }
 
+function openEditCustomerModal(id) {
+  const c = (window._customersListData || []).find(x => x.id === id);
+  if (!c) return;
+  openModal('تعديل بيانات العميل', `
+    <div class="form-grid">
+      <div class="form-group form-full"><label>اسم العميل *</label><input type="text" id="ec-name" value="${c.name || ''}"></div>
+      <div class="form-group">
+        <label>التصنيف</label>
+        <select id="ec-type">
+          ${CUSTOMER_TYPES.map(t => `<option value="${t}" ${c.type === t ? 'selected' : ''}>${t || 'غير محدد'}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label>المنطقة / المحافظة</label><input type="text" id="ec-region" value="${c.region || ''}" placeholder="القاهرة، الإسكندرية..."></div>
+      <div class="form-group"><label>الهاتف</label><input type="text" id="ec-phone" value="${c.phone || ''}"></div>
+      <div class="form-group"><label>البريد الإلكتروني</label><input type="email" id="ec-email" value="${c.email || ''}"></div>
+      <div class="form-group form-full"><label>العنوان</label><input type="text" id="ec-address" value="${c.address || ''}"></div>
+    </div>
+    <div style="margin-top:16px;text-align:left">
+      <button class="btn btn-primary" onclick="updateCustomer(${c.id})">💾 حفظ</button>
+    </div>
+  `);
+}
+
+async function updateCustomer(id) {
+  const name = document.getElementById('ec-name').value.trim();
+  if (!name) { toast('الرجاء إدخال اسم العميل', 'error'); return; }
+  await api.updateCustomer(id, {
+    name,
+    type:    document.getElementById('ec-type').value,
+    region:  document.getElementById('ec-region').value,
+    phone:   document.getElementById('ec-phone').value,
+    email:   document.getElementById('ec-email').value,
+    address: document.getElementById('ec-address').value,
+  });
+  closeModal();
+  toast('تم تعديل بيانات العميل', 'success');
+  renderCustomers();
+}
+
 async function saveCustomer() {
   const name = document.getElementById('nc-name').value.trim();
   if (!name) { toast('الرجاء إدخال اسم العميل', 'error'); return; }
-  await api.createCustomer({ name, phone: document.getElementById('nc-phone').value, email: document.getElementById('nc-email').value, address: document.getElementById('nc-address').value });
+  await api.createCustomer({
+    name,
+    type:    document.getElementById('nc-type')?.value    || '',
+    region:  document.getElementById('nc-region')?.value  || '',
+    phone:   document.getElementById('nc-phone').value,
+    email:   document.getElementById('nc-email').value,
+    address: document.getElementById('nc-address').value,
+  });
   closeModal();
   toast('تم إضافة العميل بنجاح', 'success');
   renderCustomers();

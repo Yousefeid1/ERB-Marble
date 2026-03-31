@@ -97,6 +97,12 @@
       <a class="nav-item" onclick="showPage('quotations')" data-page="quotations">
         <span class="nav-icon">📝</span><span class="nav-label">عروض الأسعار</span>
       </a>
+      <a class="nav-item" onclick="showPage('sales-performance')" data-page="sales-performance">
+        <span class="nav-icon">📊</span><span class="nav-label">أداء المبيعات</span>
+      </a>
+      <a class="nav-item" onclick="showPage('commissions')" data-page="commissions">
+        <span class="nav-icon">💰</span><span class="nav-label">العمولات</span>
+      </a>
       
       <div class="nav-section-label">المشتريات</div>
       <a class="nav-item" onclick="showPage('purchases')" data-page="purchases">
@@ -268,6 +274,7 @@
 <script src="js/pages/quality.js"></script>
 <script src="js/pages/crm.js"></script>
 <script src="js/pages/machines.js"></script>
+<script src="js/pages/sales-performance.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

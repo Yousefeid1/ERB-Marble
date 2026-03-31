@@ -192,14 +192,14 @@ const ROLE_PAGES = {
   'مدير عام':        null, // null = all pages visible
   'مدير':            null,
   'محاسب':           ['dashboard', 'journal', 'accounts', 'trial-balance', 'payments', 'expenses', 'report-pl', 'report-bs', 'report-waste', 'report-inventory', 'cost-centers', 'checks', 'year-closing', 'recurring-entries', 'settings', 'notifications'],
-  'موظف مبيعات':    ['dashboard', 'sales', 'customers', 'aging', 'quotations', 'crm', 'export', 'notifications'],
-  'مدير مبيعات':    ['dashboard', 'sales', 'customers', 'aging', 'quotations', 'crm', 'export', 'payments', 'report-pl', 'notifications'],
+  'موظف مبيعات':    ['dashboard', 'sales', 'customers', 'aging', 'quotations', 'crm', 'export', 'commissions', 'notifications'],
+  'مدير مبيعات':    ['dashboard', 'sales', 'customers', 'aging', 'quotations', 'crm', 'export', 'payments', 'report-pl', 'sales-performance', 'commissions', 'notifications'],
   'موظف مشتريات':  ['dashboard', 'purchases', 'suppliers', 'payments', 'notifications'],
   'موظف تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'quality', 'manufacturing', 'products', 'notifications'],
   'مدير تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'quality', 'manufacturing', 'cost-centers', 'products', 'report-waste', 'report-inventory', 'notifications'],
   'مشرف تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'quality', 'manufacturing', 'products', 'notifications'],
   'موظف لوجستيك':  ['dashboard', 'warehouses', 'shipments', 'shipment-report', 'export', 'notifications'],
-  'مدير قسم':       ['dashboard', 'employees', 'activity-log', 'sales', 'customers', 'crm', 'export', 'report-pl', 'notifications'],
+  'مدير قسم':       ['dashboard', 'employees', 'activity-log', 'sales', 'customers', 'crm', 'export', 'report-pl', 'sales-performance', 'commissions', 'notifications'],
   'موظف عادي':      ['dashboard', 'notifications'],
 };
 
@@ -413,6 +413,8 @@ const pageTitles = {
   'recurring-entries':  'القيود المتكررة',
   'machines':           'لوحة تتبع الماكينات',
   'report-project-profit': 'تقرير ربحية المشاريع',
+  'sales-performance': 'أداء المبيعات والسيلز',
+  'commissions':       'إدارة العمولات',
 };
 
 // Track current page for real-time refresh
@@ -487,6 +489,8 @@ function showPage(pageName) {
     'recurring-entries': renderRecurringEntries,
     'machines':         renderMachines,
     'report-project-profit': renderReportProjectProfit,
+    'sales-performance': renderSalesPerformance,
+    'commissions':       renderCommissions,
   };
 
   if (renders[pageName]) {
