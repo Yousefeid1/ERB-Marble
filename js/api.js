@@ -44,7 +44,7 @@ const SEED_DATA = {
   quotations: [],
   activity_log: [],
   settings: {
-    company_name: 'شركة الرخام والجرانيت',
+    company_name: 'شركة النخبة للتصدير',
     currency: 'EGP',
     tax_rate: 14,
     exchange_rate: 31,
@@ -1197,6 +1197,220 @@ const api = {
     };
   },
 };
+
+// ===== دوال الربط التلقائي بين الجداول =====
+
+// تحديث المخزون (إضافة / خصم)
+function updateInventory(itemId, qty, direction, warehouseId) {
+  try {
+    const blocks = DB.getAll('blocks');
+    const block  = blocks.find(b => b.id === parseInt(itemId) || b.code === itemId);
+    if (block && direction === 'in') {
+      // تحديث حالة الكتلة الخام
+      block.status = 'in_stock';
+      DB.save('blocks', block);
+    }
+    // تسجيل في سجل حركة المخزون
+    DB.save('inventory_movements', {
+      id:          DB.nextId('inventory_movements'),
+      item_id:     itemId,
+      qty:         parseFloat(qty) || 0,
+      direction,
+      warehouse_id: warehouseId || '',
+      date:        new Date().toISOString().split('T')[0],
+    });
+  } catch (_) {}
+}
+
+// إنشاء قيد محاسبي تلقائي
+function createAutoJournal({ debit, credit, amount, ref, date }) {
+  try {
+    const accounts = DB.getAll('accounts');
+    const getAccountId = (name) => {
+      const acc = accounts.find(a => a.name && a.name.includes(name));
+      return acc ? acc.id : null;
+    };
+    const id  = DB.nextId('journal');
+    const num = `AJ-${new Date().getFullYear()}-${String(id).padStart(4, '0')}`;
+    DB.save('journal', {
+      id,
+      number:      num,
+      date:        date || new Date().toISOString().split('T')[0],
+      description: `قيد تلقائي — ${ref || ''}`,
+      lines: [
+        { account_id: getAccountId(debit),  account_name: debit,  debit: parseFloat(amount) || 0, credit: 0 },
+        { account_id: getAccountId(credit), account_name: credit, debit: 0, credit: parseFloat(amount) || 0 },
+      ],
+    });
+  } catch (_) {}
+}
+
+// تحديث تكلفة بند (كتلة أو لوح)
+function updateItemCost(itemId, stageCost) {
+  try {
+    const block = DB.findById('blocks', itemId);
+    if (block) {
+      block.cost = (block.cost || 0) + (parseFloat(stageCost) || 0);
+      DB.save('blocks', block);
+      return;
+    }
+    const slab = DB.findById('slabs', itemId);
+    if (slab) {
+      slab.cost = (slab.cost || 0) + (parseFloat(stageCost) || 0);
+      DB.save('slabs', slab);
+    }
+  } catch (_) {}
+}
+
+// تحديث تكلفة لوح
+function updateSlabCost(slabId, stageCost) {
+  try {
+    const slab = DB.findById('slabs', slabId);
+    if (slab) {
+      slab.cost = (slab.cost || 0) + (parseFloat(stageCost) || 0);
+      DB.save('slabs', slab);
+    }
+  } catch (_) {}
+}
+
+// تحديث حالة لوح
+function updateSlabStatus(slabId, newStatus) {
+  try {
+    const slab = DB.findById('slabs', slabId);
+    if (slab) {
+      slab.status = newStatus;
+      DB.save('slabs', slab);
+    }
+  } catch (_) {}
+}
+
+// حجز ألواح لأمر تصدير
+function reserveInventory(items) {
+  try {
+    (items || []).forEach(item => {
+      if (item.slab_id) {
+        const slab = DB.findById('slabs', item.slab_id);
+        if (slab) { slab.status = 'محجوز'; DB.save('slabs', slab); }
+      }
+    });
+  } catch (_) {}
+}
+
+// تحديث آخر صفقة في سجل العميل (CRM)
+function updateCRMLastDeal(customerId, date, orderId) {
+  try {
+    const crm = DB.getAll('crm_records');
+    const rec = crm.find(r => r.customer_id === parseInt(customerId));
+    if (rec) {
+      rec.last_deal_date  = date || new Date().toISOString().split('T')[0];
+      rec.last_deal_id    = orderId;
+      DB.save('crm_records', rec);
+    }
+  } catch (_) {}
+}
+
+// تحديث حالة فاتورة بناءً على المبلغ المدفوع
+function updateInvoiceStatus(invoiceId, amountPaid) {
+  try {
+    const inv = DB.findById('sales', invoiceId);
+    if (!inv) return;
+    inv.paid_amount = Math.min((inv.paid_amount || 0) + (parseFloat(amountPaid) || 0), inv.total_amount);
+    if (inv.paid_amount >= inv.total_amount) inv.status = 'paid';
+    else if (inv.paid_amount > 0)            inv.status = 'partial';
+    DB.save('sales', inv);
+  } catch (_) {}
+}
+
+// تحديث رصيد العميل في CRM
+function updateCRMBalance(customerId, amount) {
+  try {
+    const crm = DB.getAll('crm_records');
+    const rec = crm.find(r => r.customer_id === parseInt(customerId));
+    if (rec) {
+      rec.balance = (rec.balance || 0) - (parseFloat(amount) || 0);
+      DB.save('crm_records', rec);
+    }
+  } catch (_) {}
+}
+
+// تحديث رصيد المورد
+function updateSupplierBalance(supplierId, amount, operation) {
+  try {
+    const supplier = DB.findById('suppliers', supplierId);
+    if (!supplier) return;
+    const amt = parseFloat(amount) || 0;
+    if (operation === 'add') {
+      supplier.balance = (supplier.balance || 0) + amt;
+    } else {
+      supplier.balance = Math.max(0, (supplier.balance || 0) - amt);
+    }
+    DB.save('suppliers', supplier);
+  } catch (_) {}
+}
+
+// تحديث حالة كتلة خام
+function updateBlockStatus(blockId, newStatus) {
+  try {
+    const block = DB.findById('blocks', blockId);
+    if (block) {
+      block.status = newStatus;
+      DB.save('blocks', block);
+    }
+  } catch (_) {}
+}
+
+// إنشاء ألواح من عملية نشر
+function createSlabsFromCutting(cuttingData) {
+  try {
+    const { blockId, slabs_count, grade_a, grade_b, grade_c, waste, block_type, cutting_id } = cuttingData;
+    let slabNum = DB.nextId('slabs');
+    const block = DB.findById('blocks', parseInt(blockId));
+    const blockCode = block ? block.code : '';
+
+    // إنشاء ألواح درجة أولى
+    for (let i = 0; i < (grade_a || 0); i++) {
+      DB.save('slabs', {
+        id:         slabNum++,
+        code:       `SLB-${String(slabNum).padStart(4, '0')}`,
+        block_id:   parseInt(blockId),
+        block_code: blockCode,
+        type:       block_type || '',
+        grade:      'درجة أولى',
+        width:      0, height: 0, thickness: 2, area_m2: 0,
+        status:     'متاح',
+        cutting_id: cutting_id || null,
+      });
+    }
+    // إنشاء ألواح درجة ثانية
+    for (let i = 0; i < (grade_b || 0); i++) {
+      DB.save('slabs', {
+        id:         slabNum++,
+        code:       `SLB-${String(slabNum).padStart(4, '0')}`,
+        block_id:   parseInt(blockId),
+        block_code: blockCode,
+        type:       block_type || '',
+        grade:      'درجة ثانية',
+        width:      0, height: 0, thickness: 2, area_m2: 0,
+        status:     'متاح',
+        cutting_id: cutting_id || null,
+      });
+    }
+    // إنشاء ألواح درجة ثالثة
+    for (let i = 0; i < (grade_c || 0); i++) {
+      DB.save('slabs', {
+        id:         slabNum++,
+        code:       `SLB-${String(slabNum).padStart(4, '0')}`,
+        block_id:   parseInt(blockId),
+        block_code: blockCode,
+        type:       block_type || '',
+        grade:      'درجة ثالثة',
+        width:      0, height: 0, thickness: 2, area_m2: 0,
+        status:     'متاح',
+        cutting_id: cutting_id || null,
+      });
+    }
+  } catch (_) {}
+}
 
 // ===== سجل أسعار الصرف التاريخي =====
 
