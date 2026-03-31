@@ -2,16 +2,25 @@
 // Mock API Client - Marble ERP (localStorage)
 // ============================================
 
-
-// دالة تشفير بسيطة للكلمات المرور (للبيئة الأمامية فقط)
-function simpleHash(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
+// ===== تشفير كلمات المرور بـ SHA-256 =====
+async function hashPassword(str) {
+  if (!str) return '';
+  // إذا كانت القيمة هاش بالفعل (تبدأ بـ sha256:) أعدها كما هي
+  if (typeof str === 'string' && str.startsWith('sha256:')) return str;
+  try {
+    const enc  = new TextEncoder().encode(str);
+    const buf  = await crypto.subtle.digest('SHA-256', enc);
+    const hex  = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    return 'sha256:' + hex;
+  } catch (_) {
+    // fallback بسيط إذا لم يكن SubtleCrypto متاحاً (بيئة قديمة)
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash = hash & hash;
+    }
+    return 'sha256_fb:' + Math.abs(hash).toString(36);
   }
-  return 'h_' + Math.abs(hash).toString(36);
 }
 
 // ===== SEED DATA =====
@@ -174,14 +183,22 @@ const SEED_DATA = {
 
 // ===== MOCK DB =====
 const DB = {
+  // ===== طبقة الـ Cache لتجنب إعادة JSON.parse في كل استدعاء =====
+  _cache: {},
+  _invalidateCache(key) { delete this._cache[key]; },
+
   get(key) {
     try {
+      if (this._cache[key] !== undefined) return this._cache[key];
       const data = localStorage.getItem('marble_db_' + key);
-      return data ? JSON.parse(data) : null;
+      const parsed = data ? JSON.parse(data) : null;
+      this._cache[key] = parsed;
+      return parsed;
     } catch { return null; }
   },
   set(key, value) {
     localStorage.setItem('marble_db_' + key, JSON.stringify(value));
+    this._cache[key] = value;
   },
   init() {
     if (!this.get('seeded')) {
@@ -275,6 +292,14 @@ const DB = {
   },
   getAll(key) { return this.get(key) || []; },
   findById(key, id) { return this.getAll(key).find(i => i.id === parseInt(id)); },
+
+  // ===== حدود التحقق من الحقول الرقمية =====
+  _numericLimits: {
+    amount:       { min: 0, max: 1e10 },
+    total_amount: { min: 0, max: 1e10 },
+    paid_amount:  { min: 0, max: 1e10 },
+  },
+
   save(key, item) {
     // تنظيف الحقول النصية قبل الحفظ في localStorage
     const cleaned = {};
@@ -285,15 +310,26 @@ const DB = {
         cleaned[k] = v;
       }
     }
+    // التحقق من الحقول الرقمية
+    for (const [field, limits] of Object.entries(this._numericLimits)) {
+      if (field in cleaned) {
+        const val = parseFloat(cleaned[field]);
+        if (isNaN(val) || val < limits.min || val > limits.max) {
+          throw new Error(`قيمة غير صالحة للحقل "${field}": ${cleaned[field]}`);
+        }
+      }
+    }
     const items = this.getAll(key);
     const idx = items.findIndex(i => i.id === cleaned.id);
     if (idx >= 0) items[idx] = cleaned; else items.push(cleaned);
     this.set(key, items);
+    this._invalidateCache(key);
     DB._broadcast(key, 'save');
     return cleaned;
   },
   remove(key, id) {
     this.set(key, this.getAll(key).filter(i => i.id !== parseInt(id)));
+    this._invalidateCache(key);
     DB._broadcast(key, 'remove');
   },
   nextId(key) {
@@ -396,7 +432,21 @@ const api = {
 
   // ===== AUTH =====
   async login(email, password) {
-    const user = DB.getAll('users').find(u => u.email === email && u.password === password);
+    const hashedInput = await hashPassword(password);
+    const user = DB.getAll('users').find(u => {
+      if (u.email !== email) return false;
+      const stored = u.password || '';
+      // مقارنة الهاش المحسوب بالهاش المخزن
+      if (stored.startsWith('sha256:') || stored.startsWith('sha256_fb:')) {
+        return stored === hashedInput;
+      }
+      // ترحيل: المستخدم لا يزال بكلمة مرور صريحة — قارنها ثم حوّلها
+      if (stored === password) {
+        hashPassword(password).then(h => { u.password = h; DB.save('users', u); });
+        return true;
+      }
+      return false;
+    });
     if (!user) throw new Error('بريد إلكتروني أو كلمة مرور غير صحيحة');
     if (user.active === false) throw new Error('تم إيقاف هذا الحساب. تواصل مع المدير.');
     if (user.work_status === 'terminated') throw new Error('تم فصل هذا الموظف. تواصل مع المدير.');

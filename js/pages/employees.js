@@ -175,8 +175,9 @@ async function saveNewEmployee() {
   if (!pass)  { toast('الرجاء إدخال كلمة المرور', 'error'); return; }
 
   try {
+    const hashedPass = await hashPassword(pass);
     await api.createUser({
-      name, email, password: pass, role,
+      name, email, password: hashedPass, role,
       department:  document.getElementById('nemp-dept').value,
       phone:       document.getElementById('nemp-phone').value,
       national_id: document.getElementById('nemp-national').value,
@@ -266,7 +267,7 @@ async function saveEditEmployee(id) {
     work_status: document.getElementById('eemp-workstatus').value,
     active:      document.getElementById('eemp-workstatus').value === 'active',
   };
-  if (pass) data.password = pass;
+  if (pass) data.password = await hashPassword(pass);
 
   try {
     await api.updateUser(id, data);

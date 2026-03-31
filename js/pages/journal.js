@@ -805,5 +805,3 @@ function saveRecurringEntry() {
   renderRecurringEntries();
 }
 
-// تشغيل فحص القيود المتكررة عند تحميل الصفحة
-checkRecurringEntries();

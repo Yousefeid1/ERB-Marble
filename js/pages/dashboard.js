@@ -392,7 +392,6 @@ async function renderDashboard() {
           <div id="top-customers-list"></div>
         </div>
       </div>
-    </div>
 
     <div class="charts-grid">
       <div class="card">
@@ -540,7 +539,7 @@ async function renderDashboard() {
     const chartData = d.charts.monthly_sales;
     if (chartData.length > 0) {
       const ctx = document.getElementById('sales-chart').getContext('2d');
-      new Chart(ctx, {
+      _registerChart('dashboard-sales', new Chart(ctx, {
         type: 'bar',
         data: {
           labels: chartData.map(r => r.month),
@@ -561,7 +560,7 @@ async function renderDashboard() {
             y: { ticks: { color: '#8892aa' }, grid: { color: 'rgba(42,47,63,0.8)' } }
           }
         }
-      });
+      }));
     }
 
     // Top customers

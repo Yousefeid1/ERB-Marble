@@ -3,8 +3,8 @@
 // لا تكرر أي دالة من هنا في ملف آخر
 // ================================================
 
-function formatCurrency(amount, currency) {
-  const s = JSON.parse(localStorage.getItem('settings') || '{}');
+function formatMoney(amount, currency) {
+  const s = JSON.parse(localStorage.getItem('marble_db_settings') || localStorage.getItem('settings') || '{}');
   const cur = currency || s.currency || 'EGP';
   const sym = { EGP:'ج.م', USD:'$', EUR:'€', GBP:'£', SAR:'ر.س', AED:'د.إ' };
   const n = parseFloat(amount || 0).toLocaleString('ar-EG', {
@@ -12,6 +12,9 @@ function formatCurrency(amount, currency) {
   });
   return `${n} ${sym[cur] || cur}`;
 }
+
+// Alias kept for backwards compatibility within this file
+function formatCurrency(amount, currency) { return formatMoney(amount, currency); }
 
 function formatDate(d, withTime) {
   if (!d) return '—';
@@ -146,4 +149,43 @@ function printSection(contentId, title) {
   );
   w.document.close();
   setTimeout(() => { w.print(); w.close(); }, 500);
+}
+
+// ===== عرض رسالة خطأ أسفل حقل إدخال =====
+function showFieldError(fieldId, msg) {
+  const field = document.getElementById(fieldId);
+  if (!field) return;
+  let errEl = field.parentElement.querySelector('.field-error-msg');
+  if (!errEl) {
+    errEl = document.createElement('span');
+    errEl.className = 'field-error-msg';
+    errEl.style.cssText = 'display:block;color:#e24b4a;font-size:12px;margin-top:4px;direction:rtl';
+    field.parentElement.appendChild(errEl);
+  }
+  errEl.textContent = msg;
+  field.style.borderColor = '#e24b4a';
+  const clearErr = () => {
+    errEl.remove();
+    field.style.borderColor = '';
+    field.removeEventListener('input', clearErr);
+  };
+  field.addEventListener('input', clearErr);
+}
+
+// ===== كائن تتبع مخططات Chart.js النشطة =====
+const _activeCharts = {};
+
+function _destroyActiveCharts() {
+  Object.keys(_activeCharts).forEach(k => {
+    try { _activeCharts[k].destroy(); } catch (_) {}
+    delete _activeCharts[k];
+  });
+}
+
+function _registerChart(id, chart) {
+  if (_activeCharts[id]) {
+    try { _activeCharts[id].destroy(); } catch (_) {}
+  }
+  _activeCharts[id] = chart;
+  return chart;
 }

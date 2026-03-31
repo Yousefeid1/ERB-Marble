@@ -58,12 +58,26 @@ function _decToken(e) {
   } catch { return null; }
 }
 
-// حفظ التوكن بشكل مشفر مع ختم الوقت
-function _storeToken(token) {
-  sessionStorage.setItem('marble_token', _encToken(token));
-  sessionStorage.setItem('marble_token_ts', Date.now());
-  // حذف أي نسخة نصية قديمة غير مشفرة من localStorage
+// حفظ التوكن بشكل مشفر (دالة موحدة)
+function saveToken(token) {
+  const encrypted = token.split('').map((c, i) => {
+    const k = _key();
+    return String.fromCharCode(
+      c.charCodeAt(0) ^ k.charCodeAt(i % k.length)
+    );
+  }).join('').split('').map(c =>
+    c.charCodeAt(0).toString(16).padStart(2, '0')
+  ).join('');
+
+  sessionStorage.setItem(_TK, JSON.stringify({
+    t:    encrypted,
+    exp:  Date.now() + _TOKEN_EXPIRY_MS,
+    last: Date.now()
+  }));
+  // حذف أي نسخة قديمة غير مشفرة
   localStorage.removeItem('marble_token');
+  sessionStorage.removeItem('marble_token');
+  sessionStorage.removeItem('marble_token_ts');
 }
 
 // ===== مؤقت عدم النشاط (تسجيل خروج تلقائي بعد 8 ساعات) =====
@@ -99,23 +113,7 @@ const _TK = '_xt';
 const _TOKEN_EXPIRY_MS = 8 * 60 * 60 * 1000; // 8 ساعات
 const _key = () => (navigator.userAgent.length * 7 + screen.width).toString(16);
 
-// حفظ التوكن مشفراً مع بيانات انتهاء الصلاحية
-function saveToken(token) {
-  const encrypted = token.split('').map((c, i) => {
-    const k = _key();
-    return String.fromCharCode(
-      c.charCodeAt(0) ^ k.charCodeAt(i % k.length)
-    );
-  }).join('').split('').map(c =>
-    c.charCodeAt(0).toString(16).padStart(2, '0')
-  ).join('');
-
-  sessionStorage.setItem(_TK, JSON.stringify({
-    t:    encrypted,
-    exp:  Date.now() + _TOKEN_EXPIRY_MS,
-    last: Date.now()
-  }));
-}
+// حفظ التوكن مشفراً مع بيانات انتهاء الصلاحية — انظر دالة saveToken الموحدة أعلاه
 
 // قراءة التوكن مع التحقق من الصلاحية
 function getToken() {
@@ -271,6 +269,9 @@ async function initApp() {
   // فحص النسخ الاحتياطي التلقائي
   autoBackupCheck();
 
+  // فحص القيود المتكررة بعد تسجيل الدخول الناجح
+  if (typeof checkRecurringEntries === 'function') checkRecurringEntries();
+
   // Show dashboard
   showPage('dashboard');
   initMobileMenu();
@@ -410,6 +411,8 @@ const pageTitles = {
   'checks':             'إدارة الشيكات',
   'year-closing':       'إغلاق السنة المالية',
   'recurring-entries':  'القيود المتكررة',
+  'machines':           'لوحة تتبع الماكينات',
+  'report-project-profit': 'تقرير ربحية المشاريع',
 };
 
 // Track current page for real-time refresh
@@ -482,9 +485,13 @@ function showPage(pageName) {
     'checks':           renderChecks,
     'year-closing':     renderYearClosing,
     'recurring-entries': renderRecurringEntries,
+    'machines':         renderMachines,
+    'report-project-profit': renderReportProjectProfit,
   };
 
   if (renders[pageName]) {
+    // تدمير المخططات النشطة قبل رسم الصفحة الجديدة لمنع تسرب الذاكرة
+    _destroyActiveCharts();
     try { renders[pageName](); }
     catch(err) { console.error(err); showPageError(pageName, err.message); }
   }
@@ -498,9 +505,13 @@ function showPage(pageName) {
 let _refreshTimer = null;
 function _scheduleRefresh() {
   clearTimeout(_refreshTimer);
+  // احفظ الصفحة الحالية لحظة جدولة التحديث
+  const _scheduledPage = _currentPage;
   _refreshTimer = setTimeout(() => {
     // Only refresh if the app is visible and user is logged in
     if (!document.getElementById('app').classList.contains('hidden') && currentUser) {
+      // إلغاء التحديث إذا تغيّرت الصفحة منذ الجدولة
+      if (_currentPage !== _scheduledPage) return;
       const renders = {
         'dashboard': renderDashboard, 'journal': renderJournal, 'accounts': renderAccounts,
         'trial-balance': renderTrialBalance, 'sales': renderSales, 'customers': renderCustomers,
@@ -525,6 +536,7 @@ function _scheduleRefresh() {
         'checks': renderChecks,
         'year-closing': renderYearClosing,
         'recurring-entries': renderRecurringEntries,
+        'machines': renderMachines,
       };
       if (renders[_currentPage]) renders[_currentPage]();
       loadNotifications();
@@ -655,11 +667,7 @@ function showPageError(pageName, msg) {
     </div>`;
 }
 
-// ===== HELPERS =====
-function formatMoney(n, currency = 'EGP') {
-  const amount = parseFloat(n || 0).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return amount + ' ' + currency;
-}
+// formatMoney مُعرَّفة في utils.js — لا تكرارها هنا
 
 
 function statusBadge(status) {
@@ -836,6 +844,18 @@ document.addEventListener('keydown', (e) => {
       if (saveBtn) saveBtn.click();
     }
     return;
+  }
+});
+
+// ===== تحذير عند مغادرة الصفحة مع نماذج مفتوحة =====
+window.addEventListener('beforeunload', (e) => {
+  const modal = document.getElementById('global-modal');
+  if (!modal || !modal.classList.contains('open')) return;
+  const hasInput = [...modal.querySelectorAll('input, textarea, select')]
+    .some(el => el.value && el.value.trim() !== '');
+  if (hasInput) {
+    e.preventDefault();
+    e.returnValue = 'لديك بيانات غير محفوظة. هل أنت متأكد من المغادرة؟';
   }
 });
 
@@ -1049,7 +1069,7 @@ async function submitForceChangePassword() {
     const users = DB.getAll('users');
     const user = users.find(u => u.id === userId);
     if (user) {
-      user.password = newPass;
+      user.password = await hashPassword(newPass);
       user.must_change_password = false;
       DB.save('users', user);
     }
@@ -1060,13 +1080,27 @@ async function submitForceChangePassword() {
 }
 
 // ===== روابط التنقل بين الصفحات =====
+const _NAV_ALLOWED_PAGES = new Set([
+  'dashboard', 'journal', 'accounts', 'trial-balance', 'sales', 'customers',
+  'aging', 'purchases', 'suppliers', 'payments', 'blocks', 'cutting', 'slabs',
+  'products', 'expenses', 'report-pl', 'report-bs', 'report-waste',
+  'report-inventory', 'report-cashflow', 'report-cost-per-meter',
+  'report-export-profit', 'report-inv-movement', 'report-customer-credit',
+  'report-project-profit', 'settings', 'notifications', 'employees',
+  'activity-log', 'warehouses', 'shipments', 'shipment-report', 'quotations',
+  'cost-centers', 'export', 'quality', 'crm', 'manufacturing', 'checks',
+  'year-closing', 'recurring-entries', 'machines',
+]);
+
 function buildNavLink(text, page, id, cssClass) {
   if (!text || !page || !id) return text || '—';
-  cssClass = cssClass || '';
   // تشفير النص لتجنب XSS
   const safe = String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const safeId = parseInt(id) || 0;
   if (!safeId) return safe;
+  // التحقق من القائمة البيضاء للصفحات المسموح بها
+  if (!_NAV_ALLOWED_PAGES.has(page)) return safe;
+  cssClass = cssClass || '';
   return '<a class="nav-ref ' + cssClass + '" onclick="navigateToEntity(\'' + page + '\',' + safeId + ')">' + safe + '</a>';
 }
 
