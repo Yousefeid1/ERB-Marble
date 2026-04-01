@@ -5,10 +5,10 @@
 
 // ===== أنواع مراكز التكلفة =====
 const COST_CENTER_TYPES = {
-  quarry:   'محجر',
-  machine:  'ماكينة',
-  overhead: 'تكاليف عامة',
-  export:   'تصدير',
+  quarry:        'محجر',
+  manufacturing: 'تصنيع',
+  overhead:      'تكاليف عامة',
+  export:        'تصدير',
 };
 
 // ===== فئات التكاليف غير المباشرة =====

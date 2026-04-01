@@ -192,13 +192,13 @@ const ROLE_PAGES = {
   'مدير عام':        null, // null = all pages visible
   'مدير':            null,
   'محاسب':           ['dashboard', 'journal', 'accounts', 'trial-balance', 'payments', 'expenses', 'report-pl', 'report-bs', 'report-waste', 'report-inventory', 'cost-centers', 'checks', 'year-closing', 'recurring-entries', 'settings', 'notifications'],
-  'موظف مبيعات':    ['dashboard', 'sales', 'customers', 'aging', 'quotations', 'crm', 'export', 'commissions', 'notifications'],
-  'مدير مبيعات':    ['dashboard', 'sales', 'customers', 'aging', 'quotations', 'crm', 'export', 'payments', 'report-pl', 'sales-performance', 'commissions', 'notifications'],
-  'موظف مشتريات':  ['dashboard', 'purchases', 'suppliers', 'payments', 'notifications'],
-  'موظف تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'quality', 'manufacturing', 'products', 'notifications'],
-  'مدير تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'quality', 'manufacturing', 'cost-centers', 'products', 'report-waste', 'report-inventory', 'notifications'],
-  'مشرف تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'quality', 'manufacturing', 'products', 'notifications'],
-  'موظف لوجستيك':  ['dashboard', 'warehouses', 'shipments', 'shipment-report', 'export', 'notifications'],
+  'موظف مبيعات':    ['dashboard', 'export', 'customers', 'crm', 'quotations', 'sales', 'notifications'],
+  'مدير مبيعات':    ['dashboard', 'export', 'customers', 'crm', 'quotations', 'sales', 'payments', 'report-pl', 'report-customer-credit', 'notifications'],
+  'موظف مشتريات':  ['dashboard', 'purchases', 'suppliers', 'blocks', 'slabs', 'payments', 'notifications'],
+  'موظف تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'quality', 'manufacturing', 'notifications'],
+  'مدير تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'quality', 'manufacturing', 'cost-centers', 'report-inventory', 'notifications'],
+  'مشرف تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'quality', 'manufacturing', 'notifications'],
+  'موظف لوجستيك':  ['dashboard', 'export', 'warehouses', 'shipments', 'shipment-report', 'notifications'],
   'مدير قسم':       ['dashboard', 'employees', 'activity-log', 'sales', 'customers', 'crm', 'export', 'report-pl', 'sales-performance', 'commissions', 'notifications'],
   'موظف عادي':      ['dashboard', 'notifications'],
 };
@@ -378,13 +378,13 @@ const pageTitles = {
   'trial-balance':    'ميزان المراجعة',
   'sales':            'فواتير المبيعات',
   'customers':        'العملاء',
-  'aging':            'تقرير التقادم',
+  'aging':            'مديونية العملاء',
   'purchases':        'فواتير الشراء',
   'suppliers':        'الموردون',
   'payments':         'المدفوعات والمقبوضات',
-  'blocks':           'البلوكات الخام',
-  'cutting':          'عمليات القطع',
-  'slabs':            'الألواح (Slabs)',
+  'blocks':           'الكتل الخام',
+  'cutting':          'عمليات النشر',
+  'slabs':            'الألواح',
   'products':         'المنتجات',
   'expenses':         'المصروفات',
   'report-pl':             'تقرير الأرباح والخسائر',
@@ -395,7 +395,7 @@ const pageTitles = {
   'report-cost-per-meter': 'تقرير تكلفة المتر المصنع',
   'report-export-profit':  'تقرير ربحية التصدير',
   'report-inv-movement':   'تقرير حركة المخزون',
-  'report-customer-credit':'تقرير مديونية العملاء',
+  'report-customer-credit':'مديونية العملاء',
   'settings':         'الإعدادات',
   'employees':        'إدارة الموظفين',
   'activity-log':     'سجل الأنشطة',
@@ -411,7 +411,6 @@ const pageTitles = {
   'checks':             'إدارة الشيكات',
   'year-closing':       'إغلاق السنة المالية',
   'recurring-entries':  'القيود المتكررة',
-  'machines':           'لوحة تتبع الماكينات',
   'report-project-profit': 'تقرير ربحية المشاريع',
   'sales-performance': 'أداء المبيعات والسيلز',
   'commissions':       'إدارة العمولات',
@@ -487,7 +486,7 @@ function showPage(pageName) {
     'checks':           renderChecks,
     'year-closing':     renderYearClosing,
     'recurring-entries': renderRecurringEntries,
-    'machines':         renderMachines,
+    'machines':         () => {},  // removed — kept as stub to avoid errors
     'report-project-profit': renderReportProjectProfit,
     'sales-performance': renderSalesPerformance,
     'commissions':       renderCommissions,
@@ -540,7 +539,7 @@ function _scheduleRefresh() {
         'checks': renderChecks,
         'year-closing': renderYearClosing,
         'recurring-entries': renderRecurringEntries,
-        'machines': renderMachines,
+        'machines': () => {},
       };
       if (renders[_currentPage]) renders[_currentPage]();
       loadNotifications();
@@ -1094,7 +1093,7 @@ const _NAV_ALLOWED_PAGES = new Set([
   'report-project-profit', 'settings', 'notifications', 'employees',
   'activity-log', 'warehouses', 'shipments', 'shipment-report', 'quotations',
   'cost-centers', 'export', 'quality', 'crm', 'manufacturing', 'checks',
-  'year-closing', 'recurring-entries', 'machines',
+  'year-closing', 'recurring-entries',
 ]);
 
 function buildNavLink(text, page, id, cssClass) {

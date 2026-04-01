@@ -60,147 +60,113 @@
       <a class="nav-item active" onclick="showPage('dashboard')" data-page="dashboard">
         <span class="nav-icon">⬡</span><span class="nav-label">لوحة التحكم</span>
       </a>
-      
-      <div class="nav-section-label">الحسابات</div>
+
+      <div class="nav-section-label">المشتريات</div>
+      <a class="nav-item" onclick="showPage('suppliers')" data-page="suppliers">
+        <span class="nav-icon">●</span><span class="nav-label">الموردون</span>
+      </a>
+      <a class="nav-item" onclick="showPage('purchases')" data-page="purchases">
+        <span class="nav-icon">◑</span><span class="nav-label">فواتير الشراء</span>
+      </a>
+
+      <div class="nav-section-label">المخازن</div>
+      <a class="nav-item" onclick="showPage('blocks')" data-page="blocks">
+        <span class="nav-icon">▣</span><span class="nav-label">كتل خام</span>
+      </a>
+      <a class="nav-item" onclick="showPage('slabs')" data-page="slabs">
+        <span class="nav-icon">▥</span><span class="nav-label">ألواح</span>
+      </a>
+      <a class="nav-item" onclick="showPage('report-inv-movement')" data-page="report-inv-movement">
+        <span class="nav-icon">🔄</span><span class="nav-label">حركة المخزون</span>
+      </a>
+
+      <div class="nav-section-label">التصنيع</div>
+      <a class="nav-item" onclick="showPage('cutting')" data-page="cutting">
+        <span class="nav-icon">▤</span><span class="nav-label">مراحل التصنيع</span>
+      </a>
+      <a class="nav-item" onclick="showPage('quality')" data-page="quality">
+        <span class="nav-icon">✦</span><span class="nav-label">إدارة الجودة</span>
+      </a>
+      <a class="nav-item" onclick="showPage('manufacturing')" data-page="manufacturing">
+        <span class="nav-icon">⚙️</span><span class="nav-label">تكاليف التصنيع</span>
+      </a>
+
+      <div class="nav-section-label">التصدير</div>
+      <a class="nav-item" onclick="showPage('export')" data-page="export">
+        <span class="nav-icon">🚢</span><span class="nav-label">أوامر التصدير</span>
+      </a>
+      <a class="nav-item" onclick="showPage('quotations')" data-page="quotations">
+        <span class="nav-icon">📝</span><span class="nav-label">عروض الأسعار</span>
+      </a>
+      <a class="nav-item" onclick="showPage('shipments')" data-page="shipments">
+        <span class="nav-icon">🚛</span><span class="nav-label">الشحن</span>
+      </a>
+
+      <div class="nav-section-label">العملاء والمبيعات</div>
+      <a class="nav-item" onclick="showPage('customers')" data-page="customers">
+        <span class="nav-icon">○</span><span class="nav-label">العملاء</span>
+      </a>
+      <a class="nav-item" onclick="showPage('crm')" data-page="crm">
+        <span class="nav-icon">🤝</span><span class="nav-label">CRM</span>
+      </a>
+      <a class="nav-item" onclick="showPage('sales')" data-page="sales">
+        <span class="nav-icon">◐</span><span class="nav-label">الفواتير</span>
+      </a>
+      <a class="nav-item" onclick="showPage('aging')" data-page="aging">
+        <span class="nav-icon">◔</span><span class="nav-label">مديونية العملاء</span>
+      </a>
+
+      <div class="nav-section-label">المحاسبة</div>
       <a class="nav-item" onclick="showPage('journal')" data-page="journal">
-        <span class="nav-icon">⊞</span><span class="nav-label">القيود المحاسبية</span>
+        <span class="nav-icon">⊞</span><span class="nav-label">قيود اليومية</span>
       </a>
       <a class="nav-item" onclick="showPage('accounts')" data-page="accounts">
-        <span class="nav-icon">◉</span><span class="nav-label">شجرة الحسابات</span>
-      </a>
-      <a class="nav-item" onclick="showPage('trial-balance')" data-page="trial-balance">
-        <span class="nav-icon">⊜</span><span class="nav-label">ميزان المراجعة</span>
+        <span class="nav-icon">◉</span><span class="nav-label">دليل الحسابات</span>
       </a>
       <a class="nav-item" onclick="showPage('checks')" data-page="checks">
-        <span class="nav-icon">🏦</span><span class="nav-label">إدارة الشيكات</span>
+        <span class="nav-icon">🏦</span><span class="nav-label">الشيكات</span>
       </a>
       <a class="nav-item" onclick="showPage('recurring-entries')" data-page="recurring-entries">
         <span class="nav-icon">🔄</span><span class="nav-label">القيود المتكررة</span>
       </a>
       <a class="nav-item" onclick="showPage('year-closing')" data-page="year-closing">
-        <span class="nav-icon">📅</span><span class="nav-label">إغلاق السنة المالية</span>
+        <span class="nav-icon">📅</span><span class="nav-label">إغلاق السنة</span>
       </a>
-      
-      <div class="nav-section-label">المبيعات</div>
-      <a class="nav-item" onclick="showPage('sales')" data-page="sales">
-        <span class="nav-icon">◐</span><span class="nav-label">فواتير المبيعات</span>
-      </a>
-      <a class="nav-item" onclick="showPage('customers')" data-page="customers">
-        <span class="nav-icon">○</span><span class="nav-label">العملاء</span>
-      </a>
-      <a class="nav-item" onclick="showPage('aging')" data-page="aging">
-        <span class="nav-icon">◔</span><span class="nav-label">تقرير التقادم</span>
-      </a>
-      <a class="nav-item" onclick="showPage('crm')" data-page="crm">
-        <span class="nav-icon">🤝</span><span class="nav-label">إدارة علاقات العملاء</span>
-      </a>
-      <a class="nav-item" onclick="showPage('quotations')" data-page="quotations">
-        <span class="nav-icon">📝</span><span class="nav-label">عروض الأسعار</span>
-      </a>
-      <a class="nav-item" onclick="showPage('sales-performance')" data-page="sales-performance">
-        <span class="nav-icon">📊</span><span class="nav-label">أداء المبيعات</span>
-      </a>
-      <a class="nav-item" onclick="showPage('commissions')" data-page="commissions">
-        <span class="nav-icon">💰</span><span class="nav-label">العمولات</span>
-      </a>
-      
-      <div class="nav-section-label">المشتريات</div>
-      <a class="nav-item" onclick="showPage('purchases')" data-page="purchases">
-        <span class="nav-icon">◑</span><span class="nav-label">فواتير الشراء</span>
-      </a>
-      <a class="nav-item" onclick="showPage('suppliers')" data-page="suppliers">
-        <span class="nav-icon">●</span><span class="nav-label">الموردون</span>
-      </a>
-      <a class="nav-item" onclick="showPage('payments')" data-page="payments">
-        <span class="nav-icon">◈</span><span class="nav-label">المدفوعات والمقبوضات</span>
-      </a>
-      
-      <div class="nav-section-label">الرخام والإنتاج</div>
-      <a class="nav-item" onclick="showPage('blocks')" data-page="blocks">
-        <span class="nav-icon">▣</span><span class="nav-label">البلوكات الخام</span>
-      </a>
-      <a class="nav-item" onclick="showPage('cutting')" data-page="cutting">
-        <span class="nav-icon">▤</span><span class="nav-label">عمليات القطع</span>
-      </a>
-      <a class="nav-item" onclick="showPage('slabs')" data-page="slabs">
-        <span class="nav-icon">▥</span><span class="nav-label">الألواح (Slabs)</span>
-      </a>
-      <a class="nav-item" onclick="showPage('manufacturing')" data-page="manufacturing">
-        <span class="nav-icon">⚙️</span><span class="nav-label">مراحل التصنيع</span>
-      </a>
-      <a class="nav-item" onclick="showPage('machines')" data-page="machines">
-        <span class="nav-icon">🏭</span><span class="nav-label">تتبع الماكينات</span>
-      </a>
-      <a class="nav-item" onclick="showPage('quality')" data-page="quality">
-        <span class="nav-icon">✦</span><span class="nav-label">إدارة الجودة</span>
-      </a>
-      <a class="nav-item" onclick="showPage('products')" data-page="products">
-        <span class="nav-icon">▦</span><span class="nav-label">المنتجات</span>
-      </a>
-      
-      <div class="nav-section-label">التكاليف</div>
-      <a class="nav-item" onclick="showPage('expenses')" data-page="expenses">
-        <span class="nav-icon">◪</span><span class="nav-label">المصروفات</span>
-      </a>
-      <a class="nav-item" onclick="showPage('cost-centers')" data-page="cost-centers">
-        <span class="nav-icon">🏷️</span><span class="nav-label">مراكز التكلفة</span>
-      </a>
-      
-      <div class="nav-section-label">التقارير المالية</div>
+
+      <div class="nav-section-label">التقارير</div>
       <a class="nav-item" onclick="showPage('report-pl')" data-page="report-pl">
         <span class="nav-icon">◧</span><span class="nav-label">الأرباح والخسائر</span>
       </a>
       <a class="nav-item" onclick="showPage('report-bs')" data-page="report-bs">
         <span class="nav-icon">◨</span><span class="nav-label">الميزانية العمومية</span>
       </a>
-      <a class="nav-item" onclick="showPage('report-waste')" data-page="report-waste">
-        <span class="nav-icon">◩</span><span class="nav-label">تقرير الهالك</span>
+      <a class="nav-item" onclick="showPage('report-cashflow')" data-page="report-cashflow">
+        <span class="nav-icon">💵</span><span class="nav-label">التدفقات النقدية</span>
       </a>
       <a class="nav-item" onclick="showPage('report-inventory')" data-page="report-inventory">
         <span class="nav-icon">▧</span><span class="nav-label">تقرير المخزون</span>
       </a>
-      <a class="nav-item" onclick="showPage('report-cashflow')" data-page="report-cashflow">
-        <span class="nav-icon">💵</span><span class="nav-label">التدفقات النقدية</span>
-      </a>
-      <a class="nav-item" onclick="showPage('report-cost-per-meter')" data-page="report-cost-per-meter">
-        <span class="nav-icon">📐</span><span class="nav-label">تكلفة المتر المصنع</span>
-      </a>
       <a class="nav-item" onclick="showPage('report-export-profit')" data-page="report-export-profit">
         <span class="nav-icon">🌍</span><span class="nav-label">ربحية التصدير</span>
-      </a>
-      <a class="nav-item" onclick="showPage('report-inv-movement')" data-page="report-inv-movement">
-        <span class="nav-icon">🔄</span><span class="nav-label">حركة المخزون</span>
       </a>
       <a class="nav-item" onclick="showPage('report-customer-credit')" data-page="report-customer-credit">
         <span class="nav-icon">💳</span><span class="nav-label">مديونية العملاء</span>
       </a>
-      <a class="nav-item" onclick="showPage('report-project-profit')" data-page="report-project-profit">
-        <span class="nav-icon">📈</span><span class="nav-label">ربحية المشاريع</span>
-      </a>
 
-      <div class="nav-section-label">اللوجستيك</div>
-      <a class="nav-item" onclick="showPage('warehouses')" data-page="warehouses">
-        <span class="nav-icon">🏭</span><span class="nav-label">إدارة المستودعات</span>
+      <div class="nav-section-label">الموارد البشرية</div>
+      <a class="nav-item" onclick="showPage('employees')" data-page="employees">
+        <span class="nav-icon">👥</span><span class="nav-label">الموظفين</span>
       </a>
-      <a class="nav-item" onclick="showPage('shipments')" data-page="shipments">
-        <span class="nav-icon">🚛</span><span class="nav-label">الشحن والتوصيل</span>
-      </a>
-      <a class="nav-item" onclick="showPage('shipment-report')" data-page="shipment-report">
-        <span class="nav-icon">📦</span><span class="nav-label">تقارير التصدير</span>
-      </a>
-      <a class="nav-item" onclick="showPage('export')" data-page="export">
-        <span class="nav-icon">🚢</span><span class="nav-label">نظام التصدير</span>
+      <a class="nav-item" onclick="showPage('activity-log')" data-page="activity-log">
+        <span class="nav-icon">📋</span><span class="nav-label">سجل النشاط</span>
       </a>
 
       <div class="nav-section-label">الإعدادات</div>
-      <a class="nav-item" onclick="showPage('employees')" data-page="employees">
-        <span class="nav-icon">👥</span><span class="nav-label">إدارة الموظفين</span>
-      </a>
-      <a class="nav-item" onclick="showPage('activity-log')" data-page="activity-log">
-        <span class="nav-icon">📋</span><span class="nav-label">سجل الأنشطة</span>
-      </a>
       <a class="nav-item" onclick="showPage('settings')" data-page="settings">
         <span class="nav-icon">⊕</span><span class="nav-label">الإعدادات</span>
+      </a>
+      <a class="nav-item" onclick="showPage('notifications')" data-page="notifications">
+        <span class="nav-icon">🔔</span><span class="nav-label">الإشعارات</span>
       </a>
       <a class="nav-item" onclick="doLogout()">
         <span class="nav-icon">⊗</span><span class="nav-label">تسجيل الخروج</span>

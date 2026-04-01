@@ -106,7 +106,7 @@ const SEED_DATA = {
     { id: 5, type: 'payment', party_id: 2, party: 'إيطاليا ستون للاستيراد',   party_type: 'supplier', amount: 50000, date: '2024-03-01', method: 'bank',  reference: 'PAY-002',  notes: 'دفعة جزئية PUR-2024-002' , currency: 'EGP' },
   ],
   expenses: [
-    { id: 1, category: 'صيانة وإصلاح',    description: 'صيانة ماكينات القطع',           amount: 15000, date: '2024-02-01', project_id: null , currency: 'EGP' },
+    { id: 1, category: 'مواد استهلاكية',  description: 'مواد تشغيل المصانع الخارجية',  amount: 15000, date: '2024-02-01', project_id: null , currency: 'EGP' },
     { id: 2, category: 'رواتب وأجور',      description: 'رواتب عمال الإنتاج - يناير',   amount: 45000, date: '2024-01-31', project_id: null , currency: 'EGP' },
     { id: 3, category: 'مواد استهلاكية',  description: 'أقراص قطع ومواد صرف',           amount: 8500,  date: '2024-02-10', project_id: 1 , currency: 'EGP' },
     { id: 4, category: 'مرافق',             description: 'فاتورة كهرباء',                 amount: 12000, date: '2024-02-28', project_id: null , currency: 'EGP' },

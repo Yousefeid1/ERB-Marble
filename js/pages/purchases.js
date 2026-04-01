@@ -82,13 +82,33 @@ async function filterPurchases() {
 
 function openNewPurchaseModal() {
   const suppliers = window._suppliersData || [];
-  openModal('فاتورة شراء جديدة', `
+  openModal('فاتورة شراء كتل خام جديدة', `
     <div class="form-grid">
       <div class="form-group">
         <label>المورد *</label>
         <select id="np-supplier">
           <option value="">اختر المورد</option>
           ${suppliers.map(s => `<option value="${s.id}" data-name="${s.name}">${s.name}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>نوع الحجر *</label>
+        <select id="np-stone-type">
+          <option value="رخام">رخام</option>
+          <option value="جرانيت">جرانيت</option>
+          <option value="ترافرتين">ترافرتين</option>
+          <option value="أونيكس">أونيكس</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>بلد المنشأ</label>
+        <input type="text" id="np-origin" placeholder="إيطاليا / تونس / البرازيل...">
+      </div>
+      <div class="form-group">
+        <label>وحدة القياس</label>
+        <select id="np-unit">
+          <option value="طن">طن</option>
+          <option value="متر مكعب">متر مكعب</option>
         </select>
       </div>
       <div class="form-group">
@@ -130,7 +150,7 @@ window._purchaseItemCount = 0;
 function newPurchaseItemRow(idx) {
   return `
     <div id="np-item-${idx}" style="display:grid;grid-template-columns:3fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center">
-      <input type="text" placeholder="وصف البند" id="np-item-desc-${idx}" oninput="calcPurchaseTotals()">
+      <input type="text" placeholder="وصف البند (كتل خام)" id="np-item-desc-${idx}" oninput="calcPurchaseTotals()">
       <input type="number" placeholder="الكمية" id="np-item-qty-${idx}" value="1" min="1" oninput="calcPurchaseTotals()">
       <input type="number" placeholder="السعر" id="np-item-price-${idx}" value="0" oninput="calcPurchaseTotals()">
       <button class="btn btn-danger btn-sm" onclick="this.closest('div').remove();calcPurchaseTotals()">✕</button>
@@ -166,18 +186,32 @@ async function savePurchase() {
     if (desc && qty > 0) items.push({ description: desc, qty, unit_price: price, subtotal: qty * price });
   });
   if (!items.length) { toast('أضف بندًا واحدًا على الأقل', 'error'); return; }
-  const total = items.reduce((s, i) => s + i.subtotal, 0);
-  await api.createPurchase({
-    supplier_id:   parseInt(suppEl.value),
-    supplier:      suppEl.options[suppEl.selectedIndex].dataset.name,
-    invoice_date:  document.getElementById('np-date').value,
-    due_date:      document.getElementById('np-due').value,
-    status:        document.getElementById('np-status').value,
-    currency:      document.getElementById('np-currency')?.value || 'EGP',
+  const total      = items.reduce((s, i) => s + i.subtotal, 0);
+  const supplierId = parseInt(suppEl.value);
+  const invoiceDate = document.getElementById('np-date').value;
+  const pur = await api.createPurchase({
+    supplier_id:    supplierId,
+    supplier:       suppEl.options[suppEl.selectedIndex].dataset.name,
+    stone_type:     document.getElementById('np-stone-type')?.value || '',
+    origin_country: document.getElementById('np-origin')?.value || '',
+    unit_of_measure: document.getElementById('np-unit')?.value || 'طن',
+    invoice_date:   invoiceDate,
+    due_date:       document.getElementById('np-due').value,
+    status:         document.getElementById('np-status').value,
+    currency:       document.getElementById('np-currency')?.value || 'EGP',
     items, total_amount: total, paid_amount: 0,
   });
+
+  // الربط التلقائي: تحديث المخزن + القيود المحاسبية + رصيد المورد
+  try {
+    const firstItem = items[0];
+    updateInventory(pur.id, firstItem?.qty || 1, 'in', 'كتل خام');
+    createAutoJournal({ debit: 'مخزون كتل خام', credit: 'موردون', amount: total, ref: pur.invoice_number, date: invoiceDate });
+    updateSupplierBalance(supplierId, total, 'add');
+  } catch(_) {}
+
   closeModal();
-  toast('تم حفظ فاتورة الشراء', 'success');
+  toast('تم حفظ الفاتورة وتحديث المخزن والقيود المحاسبية تلقائياً', 'success');
   renderPurchases();
 }
 
@@ -201,7 +235,7 @@ async function renderSuppliers() {
       <div class="card" style="padding:0">
         <div class="data-table-wrapper">
           <table>
-            <thead><tr><th>الاسم</th><th>الهاتف</th><th>البريد الإلكتروني</th><th>العنوان</th><th>المستحق عليه</th></tr></thead>
+            <thead><tr><th>الاسم</th><th>الهاتف</th><th>بلد المورد</th><th>نوع البضاعة المورّدة</th><th>المستحق عليه</th></tr></thead>
             <tbody id="supp-tbody">${renderSupplierRows(suppliers)}</tbody>
           </table>
         </div>
@@ -215,15 +249,21 @@ async function renderSuppliers() {
 
 function renderSupplierRows(suppliers) {
   if (!suppliers.length) return `<tr><td colspan="5"><div class="empty-state" style="padding:30px"><div class="empty-icon">🏭</div><h3>لا يوجد موردون</h3></div></td></tr>`;
-  return suppliers.map(s => `
+  return suppliers.map(s => {
+    // حساب الرصيد تلقائياً من الفواتير والمدفوعات
+    const invoices  = DB.getAll('purchases').filter(p => p.supplier_id === s.id);
+    const totalInv  = invoices.reduce((sum, p) => sum + (p.total_amount || 0), 0);
+    const totalPaid = invoices.reduce((sum, p) => sum + (p.paid_amount  || 0), 0);
+    const balance   = totalInv - totalPaid;
+    return `
     <tr>
       <td><strong>${s.name}</strong></td>
       <td>${s.phone || '-'}</td>
-      <td>${s.email || '-'}</td>
-      <td>${s.address || '-'}</td>
-      <td class="number ${s.balance > 0 ? 'text-danger' : 'text-success'}">${formatMoney(s.balance)}</td>
+      <td>${s.country || s.address || '-'}</td>
+      <td>${s.goods_type || '-'}</td>
+      <td class="number ${balance > 0 ? 'text-danger' : 'text-success'}">${formatMoney(balance)}</td>
     </tr>
-  `).join('');
+  `}).join('');
 }
 
 async function filterSuppliers() {
@@ -238,6 +278,15 @@ function openNewSupplierModal() {
       <div class="form-group form-full"><label>اسم المورد *</label><input type="text" id="nsupp-name" placeholder="اسم الشركة"></div>
       <div class="form-group"><label>الهاتف</label><input type="text" id="nsupp-phone"></div>
       <div class="form-group"><label>البريد الإلكتروني</label><input type="email" id="nsupp-email"></div>
+      <div class="form-group"><label>بلد المورد</label><input type="text" id="nsupp-country" placeholder="إيطاليا / تونس / البرازيل..."></div>
+      <div class="form-group">
+        <label>نوع البضاعة المورّدة</label>
+        <select id="nsupp-goods">
+          <option value="كتل رخام">كتل رخام</option>
+          <option value="كتل جرانيت">كتل جرانيت</option>
+          <option value="كليهما">كليهما</option>
+        </select>
+      </div>
       <div class="form-group form-full"><label>العنوان</label><input type="text" id="nsupp-address"></div>
     </div>
     <div style="margin-top:16px;text-align:left">
@@ -249,7 +298,14 @@ function openNewSupplierModal() {
 async function saveSupplier() {
   const name = document.getElementById('nsupp-name').value.trim();
   if (!name) { toast('الرجاء إدخال اسم المورد', 'error'); return; }
-  await api.createSupplier({ name, phone: document.getElementById('nsupp-phone').value, email: document.getElementById('nsupp-email').value, address: document.getElementById('nsupp-address').value });
+  await api.createSupplier({
+    name,
+    phone:      document.getElementById('nsupp-phone').value,
+    email:      document.getElementById('nsupp-email').value,
+    country:    document.getElementById('nsupp-country')?.value || '',
+    goods_type: document.getElementById('nsupp-goods')?.value || '',
+    address:    document.getElementById('nsupp-address').value,
+  });
   closeModal();
   toast('تم إضافة المورد بنجاح', 'success');
   renderSuppliers();
