@@ -297,13 +297,13 @@ async function renderDashboard() {
         .sort((a, b) => b.total - a.total).slice(0, 5);
     })();
 
-    // أعلى 5 ماكينات تكلفةً هذا الشهر
+    // أعلى 5 مراحل تصنيع تكلفةً هذا الشهر
     const top5Machines = (() => {
       const map = {};
       thisMStages.forEach(s => {
-        if (!s.machineId) return;
+        const label = s.customStage || s.stage || 'غير محدد';
         const cost = (s.directCost || 0) + (s.laborCost || 0) + (s.materialCost || 0) + (s.transportCost || 0);
-        map[s.machineId] = (map[s.machineId] || 0) + cost;
+        map[label] = (map[label] || 0) + cost;
       });
       return Object.entries(map).map(([id, cost]) => ({ id, cost }))
         .sort((a, b) => b.cost - a.cost).slice(0, 5);
@@ -458,7 +458,7 @@ async function renderDashboard() {
       </div>
       <div class="card">
         <div class="card-header">
-          <span class="card-title">⚙️ أعلى 5 ماكينات تكلفةً هذا الشهر</span>
+          <span class="card-title">⚙️ أعلى 5 مراحل تصنيع تكلفةً هذا الشهر</span>
           <button class="btn btn-secondary btn-sm" onclick="showPage('manufacturing')">التصنيع</button>
         </div>
         <div style="padding:4px">

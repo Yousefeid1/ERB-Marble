@@ -157,8 +157,8 @@ async function renderReportWaste() {
         <div class="data-table-wrapper">
           <table>
             <thead><tr>
-              <th>رقم الدفعة</th><th>البلوك</th><th>النوع</th><th>التاريخ</th>
-              <th>الكلي</th><th>درجة A</th><th>درجة B</th><th>هالك</th><th>% الهالك</th>
+              <th>رقم الدفعة</th><th>الكتلة</th><th>النوع</th><th>التاريخ</th>
+              <th>الكلي</th><th>درجة أولى</th><th>درجة ثانية</th><th>الفاقد</th><th>% الفاقد</th>
             </tr></thead>
             <tbody>
               ${r.details.length === 0
@@ -328,7 +328,7 @@ function exportBSExcel() {
 function exportWastePDF() {
   const r = window._wasteData;
   if (!r) { toast('لا توجد بيانات', 'error'); return; }
-  const headers = ['رقم الدفعة', 'البلوك', 'النوع', 'التاريخ', 'الكلي', 'درجة A', 'درجة B', 'هالك', '% الهالك'];
+  const headers = ['رقم الدفعة', 'الكتلة', 'النوع', 'التاريخ', 'الكلي', 'درجة أولى', 'درجة ثانية', 'الفاقد', '% الفاقد'];
   const rows = r.details.map(b => [b.batch_number, b.block_code, b.block_type, formatDate(b.date), b.slabs_count, b.grade_a, b.grade_b, b.waste, b.waste_percentage.toFixed(1) + '%']);
   const totalsRow = ['الإجمالي', '', '', '', r.total_slabs, '', '', r.total_waste_slabs, r.avg_waste_percentage.toFixed(1) + '%'];
   exportGenericPDF({ title: 'تقرير الهالك', subtitle: 'نظام ERP - الرخام والجرانيت', headers, rows, totalsRow, filename: `waste-${new Date().toISOString().split('T')[0]}.pdf` });
@@ -337,7 +337,7 @@ function exportWastePDF() {
 function exportWasteExcel() {
   const r = window._wasteData;
   if (!r) { toast('لا توجد بيانات', 'error'); return; }
-  const headers = ['رقم الدفعة', 'كود البلوك', 'نوع الحجر', 'التاريخ', 'إجمالي الألواح', 'درجة A', 'درجة B', 'هالك', '% الهالك'];
+  const headers = ['رقم الدفعة', 'رقم الكتلة', 'نوع الحجر', 'التاريخ', 'إجمالي الألواح', 'درجة أولى', 'درجة ثانية', 'الفاقد', '% الفاقد'];
   const rows = r.details.map(b => [b.batch_number, b.block_code, b.block_type, b.date, b.slabs_count, b.grade_a, b.grade_b, b.waste, b.waste_percentage]);
   const totalsRow = ['الإجمالي', '', '', '', r.total_slabs, '', '', r.total_waste_slabs, r.avg_waste_percentage];
   exportGenericExcel({ sheetName: 'تقرير الهالك', headers, rows, totalsRow, filename: `waste-${new Date().toISOString().split('T')[0]}.xlsx` });

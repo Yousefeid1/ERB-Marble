@@ -3,31 +3,37 @@
 // إدارة مراحل تصنيع الرخام والجرانيت
 // ============================================
 
-// ===== معدلات تكلفة المناولة =====
-const HANDLING_RATES = { forkLift: 15, crane: 25, labor: 8 };
+// ===== معدلات تكلفة المناولة (عمالة فقط) =====
+const HANDLING_RATES = { labor: 8 };
 
-// ===== قائمة مراحل الإنتاج المدعومة =====
+// ===== حساب تكلفة المناولة =====
+function calcHandlingCost(workers, hours) {
+  return {
+    forkLiftCost: 0,
+    craneCost:    0,
+    laborCost:    workers * hours * HANDLING_RATES.labor,
+  };
+}
 const MANUFACTURING_STAGES = [
-  'شراء الأحجار',
-  'مسح الأحجار',
-  'نشر رخام',
-  'نشر جرانيت',
-  'إعادة نشر',
-  'تقطيع طاولات',
+  'نشر الرخام',
+  'نشر الجرانيت',
+  'تلميع',
   'معالجة بالريزن',
   'معالجة بالإيبوكسي',
-  'تلميع',
-  'عمليات وتر جيت',
-  'تصنيع أحواض ومغاسل',
-  'كبريشن',
-  'فلاقة',
-  'هوند',
-  'براشد',
-  'بوش همر',
-  'طمبل',
-  'شطف',
+  'تشطيب وتر جيت (Water Jet)',
+  'كالبريشون (Calibration)',
+  'فلقة (Flaming)',
+  'هوند (Honing)',
+  'براشد (Bush Hammering)',
+  'شطف الحواف',
+  'طمبل (Tumbling)',
   'سنفرة',
   'حرق',
+  'تصنيع حوض / مغسلة',
+  'تصنيع درج',
+  'تصنيع وتر جيت مخصص',
+  'تغليف',
+  'تحميل وشحن',
   'مرحلة مخصصة',
 ];
 
@@ -35,17 +41,7 @@ const MANUFACTURING_STAGES = [
 const UNITS = ['م²', 'م³', 'طن', 'لوح', 'قطعة'];
 
 // ===== درجات الجودة =====
-const QUALITY_GRADES = ['A', 'B', 'C', 'D'];
-
-// ===== حساب تكلفة المناولة =====
-// تُحسب بناءً على المسافة وعدد الرفعات والعمال وساعات العمل
-function calcHandlingCost(distance, lifts, workers, hours) {
-  return {
-    forkLiftCost: distance * HANDLING_RATES.forkLift,
-    craneCost:    lifts   * HANDLING_RATES.crane,
-    laborCost:    workers * hours * HANDLING_RATES.labor,
-  };
-}
+const QUALITY_GRADES = ['درجة أولى', 'درجة ثانية', 'درجة ثالثة', 'مرفوض'];
 
 // ===== دوال مساعدة عامة =====
 
@@ -146,11 +142,10 @@ function renderManufacturing() {
             <tr>
               <th>الكتلة</th>
               <th>المرحلة</th>
-              <th>الماكينة</th>
-              <th>المشغل</th>
+              <th>المشرف المسؤول</th>
               <th>الكمية الداخلة</th>
               <th>الكمية الخارجة</th>
-              <th>الهالك</th>
+              <th>الفاقد</th>
               <th>الجودة</th>
               <th>إجمالي التكلفة</th>
               <th>التاريخ</th>
@@ -173,7 +168,7 @@ function renderManufacturing() {
 // ===== عرض صفوف جدول المراحل =====
 function renderManufacturingRows(stages) {
   if (!stages.length) {
-    return `<tr><td colspan="11">
+    return `<tr><td colspan="10">
       <div class="empty-state" style="padding:40px">
         <div class="empty-icon">🏭</div>
         <h3>لا توجد مراحل تصنيع</h3>
@@ -188,14 +183,13 @@ function renderManufacturingRows(stages) {
   return sorted.map(s => {
     const totalCost = (s.directCost || 0) + (s.laborCost || 0) +
                       (s.materialCost || 0) + (s.transportCost || 0);
-    const gradeClass = { A: 'badge-success', B: 'badge-info', C: 'badge-warning', D: 'badge-danger' };
+    const gradeClass = { 'درجة أولى': 'badge-success', 'درجة ثانية': 'badge-info', 'درجة ثالثة': 'badge-warning', 'مرفوض': 'badge-danger', A: 'badge-success', B: 'badge-info', C: 'badge-warning', D: 'badge-danger' };
     const stageName  = s.customStage || s.stage;
 
     return `
       <tr>
         <td class="number"><strong>${buildNavLink(s.blockId, 'cutting', s.blockId)}</strong></td>
         <td>${stageName}</td>
-        <td>${s.machineId || '—'}</td>
         <td>${s.operatorName || '—'}</td>
         <td class="number">${(s.inputQuantity || 0).toFixed(2)} ${s.inputUnit || ''}</td>
         <td class="number text-success">${(s.outputQuantity || 0).toFixed(2)} ${s.outputUnit || ''}</td>
@@ -287,12 +281,8 @@ function openAddStageModal() {
           <input type="text" id="ns-customStage" placeholder="أدخل اسم المرحلة">
         </div>
         <div class="form-group">
-          <label>رقم الماكينة</label>
-          <input type="text" id="ns-machineId" placeholder="مثال: MC-01">
-        </div>
-        <div class="form-group">
-          <label>اسم المشغل</label>
-          <input type="text" id="ns-operatorName" placeholder="اسم العامل أو المشغل">
+          <label>اسم المشرف المسؤول</label>
+          <input type="text" id="ns-operatorName" placeholder="اسم المشرف أو العامل">
         </div>
         <div class="form-group">
           <label>التاريخ *</label>
@@ -345,23 +335,23 @@ function openAddStageModal() {
       <p style="color:var(--accent);font-size:13px;margin-bottom:10px;font-weight:600">💰 التكاليف (ج.م)</p>
       <div class="form-grid">
         <div class="form-group">
-          <label>التكلفة المباشرة</label>
-          <input type="number" id="ns-directCost" min="0" step="0.01" value="0"
-                 oninput="updateManufacturingTotalCost()">
-        </div>
-        <div class="form-group">
-          <label>تكلفة العمالة</label>
+          <label>تكلفة العمالة (جنيه / متر مربع)</label>
           <input type="number" id="ns-laborCost" min="0" step="0.01" value="0"
                  oninput="updateManufacturingTotalCost()">
         </div>
         <div class="form-group">
-          <label>تكلفة المواد</label>
+          <label>تكلفة المواد المستخدمة (ريزن / شمع / إلخ)</label>
           <input type="number" id="ns-materialCost" min="0" step="0.01" value="0"
                  oninput="updateManufacturingTotalCost()">
         </div>
         <div class="form-group">
-          <label>تكلفة النقل</label>
+          <label>تكلفة النقل الداخلي</label>
           <input type="number" id="ns-transportCost" min="0" step="0.01" value="0"
+                 oninput="updateManufacturingTotalCost()">
+        </div>
+        <div class="form-group">
+          <label>تكاليف متنوعة أخرى</label>
+          <input type="number" id="ns-directCost" min="0" step="0.01" value="0"
                  oninput="updateManufacturingTotalCost()">
         </div>
       </div>
@@ -369,19 +359,9 @@ function openAddStageModal() {
       <!-- حاسبة تكلفة المناولة -->
       <div style="background:rgba(200,169,110,0.06);border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:4px">
         <p style="font-size:12px;color:var(--accent);margin-bottom:10px;font-weight:600">
-          🔧 حاسبة تكلفة المناولة (اختياري)
+          🔧 حاسبة تكلفة العمالة (اختياري)
         </p>
-        <div class="form-grid" style="grid-template-columns:repeat(4,1fr)">
-          <div class="form-group">
-            <label style="font-size:11px">المسافة (م)</label>
-            <input type="number" id="ns-hc-distance" min="0" step="1" value="0"
-                   oninput="applyHandlingCost()">
-          </div>
-          <div class="form-group">
-            <label style="font-size:11px">عدد الرفعات</label>
-            <input type="number" id="ns-hc-lifts" min="0" step="1" value="0"
-                   oninput="applyHandlingCost()">
-          </div>
+        <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
           <div class="form-group">
             <label style="font-size:11px">عدد العمال</label>
             <input type="number" id="ns-hc-workers" min="0" step="1" value="0"
@@ -447,30 +427,18 @@ function updateManufacturingTotalCost() {
   if (display) display.textContent = `إجمالي التكلفة: ${formatMoney(total)}`;
 }
 
-// ===== تطبيق حاسبة تكلفة المناولة على حقول التكلفة =====
+// ===== تطبيق حاسبة تكلفة العمالة على حقول التكلفة =====
 function applyHandlingCost() {
-  const distance = parseFloat(document.getElementById('ns-hc-distance').value) || 0;
-  const lifts    = parseFloat(document.getElementById('ns-hc-lifts').value)    || 0;
-  const workers  = parseFloat(document.getElementById('ns-hc-workers').value)  || 0;
-  const hours    = parseFloat(document.getElementById('ns-hc-hours').value)    || 0;
+  const workers  = parseFloat(document.getElementById('ns-hc-workers')?.value) || 0;
+  const hours    = parseFloat(document.getElementById('ns-hc-hours')?.value)   || 0;
 
-  const hc     = calcHandlingCost(distance, lifts, workers, hours);
+  const hc     = calcHandlingCost(workers, hours);
   const result = document.getElementById('ns-hc-result');
   if (result) {
-    result.innerHTML = `
-      رافعة شوكية: <strong>${formatMoney(hc.forkLiftCost)}</strong> &nbsp;|&nbsp;
-      رافعة: <strong>${formatMoney(hc.craneCost)}</strong> &nbsp;|&nbsp;
-      عمالة: <strong>${formatMoney(hc.laborCost)}</strong>
-    `;
+    result.innerHTML = `عمالة: <strong>${formatMoney(hc.laborCost)}</strong>`;
   }
 
-  // إضافة تكاليف المناولة تلقائياً إلى الحقول المقابلة
-  const transportEl = document.getElementById('ns-transportCost');
-  const laborEl     = document.getElementById('ns-laborCost');
-
-  if (transportEl) {
-    transportEl.value = (hc.forkLiftCost + hc.craneCost).toFixed(2);
-  }
+  const laborEl = document.getElementById('ns-laborCost');
   if (laborEl) {
     laborEl.value = hc.laborCost.toFixed(2);
   }
@@ -498,7 +466,6 @@ function saveManufacturingStage() {
     operationId:     document.getElementById('ns-operationId').value.trim(),
     stage,
     customStage:     stage === 'مرحلة مخصصة' ? customStage : '',
-    machineId:       document.getElementById('ns-machineId').value.trim(),
     operatorName:    document.getElementById('ns-operatorName').value.trim(),
     date,
     inputQuantity:   parseFloat(document.getElementById('ns-inputQuantity').value)  || 0,
@@ -517,6 +484,23 @@ function saveManufacturingStage() {
   };
 
   DB.save('manufacturing_stages', record);
+
+  // الربط التلقائي بعد الحفظ
+  try {
+    const stageCost = (record.directCost || 0) + (record.laborCost || 0) +
+                      (record.materialCost || 0) + (record.transportCost || 0);
+    if (stageCost > 0) {
+      // تحديث تكلفة الكتلة الأم بدلاً من اللوح (لأن الكتلة هي المرجع في هذه المرحلة)
+      updateItemCost(blockId, stageCost);
+      createAutoJournal({ debit: 'تكاليف تصنيع', credit: 'مستحقات تصنيع', amount: stageCost, ref: record.operationId || String(record.id), date });
+    }
+    // إذا كانت من مراحل الإنهاء — تحديث حالة اللوح
+    const finishingStages = ['تغليف', 'تحميل وشحن'];
+    if (finishingStages.includes(stage)) {
+      updateSlabStatus(blockId, 'جاهز للتصدير');
+    }
+  } catch(_) {}
+
   closeModal();
   toast('تم حفظ مرحلة التصنيع بنجاح', 'success');
   renderManufacturing();
@@ -530,7 +514,7 @@ function viewManufacturingStage(id) {
   const totalCost   = (s.directCost || 0) + (s.laborCost || 0) +
                       (s.materialCost || 0) + (s.transportCost || 0);
   const stageName   = s.customStage || s.stage;
-  const gradeClass  = { A: 'badge-success', B: 'badge-info', C: 'badge-warning', D: 'badge-danger' };
+  const gradeClass  = { 'درجة أولى': 'badge-success', 'درجة ثانية': 'badge-info', 'درجة ثالثة': 'badge-warning', 'مرفوض': 'badge-danger', A: 'badge-success', B: 'badge-info', C: 'badge-warning', D: 'badge-danger' };
   const blockTotal  = getTotalManufacturingCost(s.blockId);
 
   openModal(`تفاصيل المرحلة — ${stageName}`, `
@@ -541,8 +525,7 @@ function viewManufacturingStage(id) {
           <tr><td style="color:var(--text-secondary);padding:4px 0">رقم الكتلة</td><td><strong>${s.blockId}</strong></td></tr>
           <tr><td style="color:var(--text-secondary);padding:4px 0">رقم الدفعة</td><td>${s.operationId || '—'}</td></tr>
           <tr><td style="color:var(--text-secondary);padding:4px 0">المرحلة</td><td><strong>${stageName}</strong></td></tr>
-          <tr><td style="color:var(--text-secondary);padding:4px 0">الماكينة</td><td>${s.machineId || '—'}</td></tr>
-          <tr><td style="color:var(--text-secondary);padding:4px 0">المشغل</td><td>${s.operatorName || '—'}</td></tr>
+          <tr><td style="color:var(--text-secondary);padding:4px 0">المشرف المسؤول</td><td>${s.operatorName || '—'}</td></tr>
           <tr><td style="color:var(--text-secondary);padding:4px 0">التاريخ</td><td>${formatDate(s.date)}</td></tr>
           <tr><td style="color:var(--text-secondary);padding:4px 0">الجودة</td>
             <td><span class="badge ${gradeClass[s.qualityGrade] || 'badge-info'}">${s.qualityGrade || '—'}</span></td></tr>
@@ -553,13 +536,13 @@ function viewManufacturingStage(id) {
         <table style="width:100%;font-size:13px;border-collapse:collapse">
           <tr><td style="color:var(--text-secondary);padding:4px 0">الداخلة</td><td class="number">${(s.inputQuantity || 0).toFixed(2)} ${s.inputUnit}</td></tr>
           <tr><td style="color:var(--text-secondary);padding:4px 0">الخارجة</td><td class="number text-success">${(s.outputQuantity || 0).toFixed(2)} ${s.outputUnit}</td></tr>
-          <tr><td style="color:var(--text-secondary);padding:4px 0">الهالك</td><td class="number text-danger">${(s.wasteQuantity || 0).toFixed(2)}</td></tr>
-          <tr><td style="color:var(--text-secondary);padding:4px 0">سبب الهالك</td><td>${s.wasteReason || '—'}</td></tr>
+          <tr><td style="color:var(--text-secondary);padding:4px 0">الفاقد</td><td class="number text-danger">${(s.wasteQuantity || 0).toFixed(2)}</td></tr>
+          <tr><td style="color:var(--text-secondary);padding:4px 0">سبب الفاقد</td><td>${s.wasteReason || '—'}</td></tr>
           <tr style="border-top:1px solid var(--border)">
-            <td style="color:var(--text-secondary);padding:4px 0">التكلفة المباشرة</td><td class="number">${formatMoney(s.directCost)}</td></tr>
+            <td style="color:var(--text-secondary);padding:4px 0">تكاليف متنوعة</td><td class="number">${formatMoney(s.directCost)}</td></tr>
           <tr><td style="color:var(--text-secondary);padding:4px 0">تكلفة العمالة</td><td class="number">${formatMoney(s.laborCost)}</td></tr>
           <tr><td style="color:var(--text-secondary);padding:4px 0">تكلفة المواد</td><td class="number">${formatMoney(s.materialCost)}</td></tr>
-          <tr><td style="color:var(--text-secondary);padding:4px 0">تكلفة النقل</td><td class="number">${formatMoney(s.transportCost)}</td></tr>
+          <tr><td style="color:var(--text-secondary);padding:4px 0">تكلفة النقل الداخلي</td><td class="number">${formatMoney(s.transportCost)}</td></tr>
           <tr style="border-top:1px solid var(--border);font-weight:700">
             <td style="color:var(--accent);padding:4px 0">إجمالي هذه المرحلة</td>
             <td class="number" style="color:var(--accent)">${formatMoney(totalCost)}</td></tr>
@@ -684,8 +667,7 @@ function renderProductionChain() {
                   ${(s.wasteQuantity || 0).toFixed(2)}
                 </strong>
               </div>
-              ${s.machineId    ? `<div><span style="color:var(--text-muted)">الماكينة: </span><strong>${s.machineId}</strong></div>` : ''}
-              ${s.operatorName ? `<div><span style="color:var(--text-muted)">المشغل: </span><strong>${s.operatorName}</strong></div>` : ''}
+              ${s.operatorName ? `<div><span style="color:var(--text-muted)">المشرف: </span><strong>${s.operatorName}</strong></div>` : ''}
               <div>
                 <span style="color:var(--text-muted)">التكلفة: </span>
                 <strong style="color:var(--accent)">${formatMoney(cost)}</strong>
