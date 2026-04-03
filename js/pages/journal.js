@@ -2,6 +2,28 @@
 // Journal, Accounts & Trial Balance Pages
 // ============================================
 
+// ===== قيود محاسبية تلقائية =====
+
+/** إنشاء قيد محاسبي تلقائي دون تدخل المستخدم */
+function createAutoJournal(data) {
+  const { debit, credit, amount, ref, date, description } = data;
+  const entries = DB.getAll('journal_entries') || [];
+  const newEntry = {
+    id:             Date.now(),
+    date:           date || new Date().toISOString().split('T')[0],
+    description:    'قيد تلقائي - ' + (description || ''),
+    type:           'تلقائي',
+    ref:            ref || '',
+    debit_account:  debit,
+    credit_account: credit,
+    amount:         parseFloat(amount) || 0,
+    created_at:     new Date().toISOString(),
+  };
+  entries.push(newEntry);
+  DB.set('journal_entries', entries);
+  return newEntry;
+}
+
 // ===== JOURNAL ENTRIES =====
 async function renderJournal() {
   const content = document.getElementById('page-content');
