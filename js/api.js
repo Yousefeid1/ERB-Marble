@@ -143,6 +143,14 @@ const SEED_DATA = {
     { id: 22, code: '5230', name: 'مرافق',                     type: 'expense',   parent_id: 19,   balance: 12000 },
     { id: 23, code: '5240', name: 'نقل وشحن',                  type: 'expense',   parent_id: 19,   balance: 5500 },
     { id: 24, code: '5250', name: 'مواد استهلاكية',           type: 'expense',   parent_id: 19,   balance: 8500 },
+    { id: 25, code: '1141', name: 'مخزون كتل خام',            type: 'asset',     parent_id: 2,    balance: 0 },
+    { id: 26, code: '1142', name: 'مخزون ألواح تحت التصنيع', type: 'asset',     parent_id: 2,    balance: 0 },
+    { id: 27, code: '1143', name: 'مخزون ألواح جاهزة',       type: 'asset',     parent_id: 2,    balance: 0 },
+    { id: 28, code: '5260', name: 'تكاليف تصنيع',             type: 'expense',   parent_id: 19,   balance: 0 },
+    { id: 29, code: '4110', name: 'إيرادات تصدير',            type: 'revenue',   parent_id: 15,   balance: 0 },
+    { id: 30, code: '5110', name: 'تكلفة البضاعة المصدّرة',  type: 'expense',   parent_id: 17,   balance: 0 },
+    { id: 31, code: '5270', name: 'مصاريف شحن وجمارك',       type: 'expense',   parent_id: 19,   balance: 0 },
+    { id: 32, code: '5280', name: 'عمولات تصدير',             type: 'expense',   parent_id: 19,   balance: 0 },
   ],
   journal: [
     { id: 1, number: 'JE-2024-001', date: '2024-01-10', description: 'شراء بلوك رخام BLK-2024-001',      lines: [{ account_id: 6,  account_code: '1140', account_name: 'المخزون',           debit: 85000, credit: 0     }, { account_id: 4,  account_code: '1120', account_name: 'البنك',              debit: 0,     credit: 85000 }] },
@@ -1196,6 +1204,159 @@ const api = {
       commissionSummary,
     };
   },
+
+  // ===== دوال الربط التلقائي بين الوحدات =====
+
+  /** تحديث درجة جودة لوح */
+  updateSlabGrade(slabId, newGrade) {
+    const records = DB.getAll('quality_records');
+    const rec = records.find(r => r.slabId === slabId || r.slabCode === slabId);
+    if (rec) { rec.qualityGrade = newGrade; DB.set('quality_records', records); }
+  },
+
+  /** نقل لوح مرفوض إلى المعزل */
+  moveSlabToRejected(slabId) {
+    const records = DB.getAll('quality_records');
+    const rec = records.find(r => r.slabId === slabId || r.slabCode === slabId);
+    if (rec) { rec.status = 'rejected'; DB.set('quality_records', records); }
+  },
+
+  /** تحديث حالة لوح */
+  updateSlabStatus(slabId, status) {
+    const records = DB.getAll('quality_records');
+    const rec = records.find(r => r.slabId === slabId || r.slabCode === slabId || String(r.id) === String(slabId));
+    if (rec) { rec.status = status; DB.set('quality_records', records); }
+  },
+
+  /** حجز ألواح المخزن لأمر تصدير */
+  reserveSlabs(orderItems) {
+    (orderItems || []).forEach(item => {
+      if (item.slabId) this.updateSlabStatus(item.slabId, 'reserved');
+    });
+  },
+
+  /** خصم الألواح من المخزن نهائياً عند الشحن */
+  deductInventory(orderItems) {
+    (orderItems || []).forEach(item => {
+      if (item.slabId) this.updateSlabStatus(item.slabId, 'sold');
+    });
+  },
+
+  /** إنشاء عرض سعر تلقائي من أمر التصدير */
+  createQuotationFromOrder(orderId) {
+    const order = DB.findById('export_orders', orderId);
+    if (!order) return null;
+    const quotes = DB.getAll('quotations') || [];
+    const exists = quotes.find(q => q.exportOrderId === orderId);
+    if (exists) return exists;
+    const newQuote = {
+      id:            DB.nextId('quotations'),
+      exportOrderId: orderId,
+      customerId:    order.customerId,
+      customerName:  order.customerName,
+      date:          new Date().toISOString().split('T')[0],
+      status:        'auto',
+      items:         order.items || [],
+      total:         order.totalRevenue || 0,
+      currency:      order.currency || 'EGP',
+      notes:         'عرض سعر تلقائي من أمر التصدير ' + order.exportOrderNo,
+    };
+    quotes.push(newQuote);
+    DB.set('quotations', quotes);
+    return newQuote;
+  },
+
+  /** إنشاء فاتورة مبيعات تلقائياً من أمر التصدير */
+  createSalesInvoice(orderId) {
+    const order = DB.findById('export_orders', orderId);
+    if (!order) return null;
+    const invoiceNo = 'INV-EXP-' + orderId + '-' + Date.now().toString(36).toUpperCase();
+    const invoice = {
+      id:             DB.nextId('sales'),
+      invoice_number: invoiceNo,
+      exportOrderId:  orderId,
+      customer_id:    order.customerId,
+      customer:       order.customerName,
+      invoice_date:   new Date().toISOString().split('T')[0],
+      due_date:       new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+      status:         'sent',
+      currency:       order.currency || 'EGP',
+      items:          (order.items || []).map(i => ({
+        product:    i.description || i.slabCode || '',
+        qty:        i.quantity || 1,
+        unit_price: i.unitPrice || 0,
+        subtotal:   (i.quantity || 1) * (i.unitPrice || 0),
+      })),
+      subtotal:      order.totalRevenue || 0,
+      tax:           0,
+      total_amount:  order.totalRevenue || 0,
+      paid_amount:   0,
+      notes:         'فاتورة تلقائية - أمر تصدير ' + (order.exportOrderNo || orderId),
+    };
+    DB.save('sales', invoice);
+    return invoice;
+  },
+
+  /** إنشاء فاتورة من عرض سعر */
+  createInvoiceFromQuote(quoteId) {
+    const quotes = DB.getAll('quotations') || [];
+    const quote = quotes.find(q => q.id === quoteId || String(q.id) === String(quoteId));
+    if (!quote) return null;
+    const invoiceNo = 'INV-Q-' + quoteId + '-' + Date.now().toString(36).toUpperCase();
+    const invoice = {
+      id:             DB.nextId('sales'),
+      invoice_number: invoiceNo,
+      quoteId:        quoteId,
+      customer_id:    quote.customerId,
+      customer:       quote.customerName,
+      invoice_date:   new Date().toISOString().split('T')[0],
+      due_date:       new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+      status:         'draft',
+      currency:       quote.currency || 'EGP',
+      items:          quote.items || [],
+      subtotal:       quote.total || 0,
+      tax:            0,
+      total_amount:   quote.total || 0,
+      paid_amount:    0,
+      notes:          'فاتورة من عرض سعر #' + quoteId,
+    };
+    DB.save('sales', invoice);
+    // تحديث حالة عرض السعر
+    quote.status = 'invoiced';
+    DB.save('quotations', quote);
+    return invoice;
+  },
+
+  /** تسجيل تفاعل في CRM */
+  updateCRMInteraction(customerId, type, refId) {
+    if (typeof addCrmInteraction === 'function') {
+      addCrmInteraction(customerId, {
+        type:    'quote_accept',
+        summary: type + (refId ? ' #' + refId : ''),
+        date:    new Date().toISOString().split('T')[0],
+      });
+    }
+  },
+
+  /** تحديث تاريخ آخر صفقة في CRM */
+  updateCRMLastDeal(customerId, date, orderId) {
+    const all = DB.getAll('crm_customers') || [];
+    let rec = all.find(c => c.id === customerId);
+    if (!rec) { rec = { id: customerId, interactions: [], sampleRequests: [], contacts: [] }; all.push(rec); }
+    rec.lastExportOrderDate  = date || new Date().toISOString().split('T')[0];
+    rec.lastExportOrderId    = orderId;
+    DB.set('crm_customers', all);
+  },
+
+  /** تحديث رصيد العميل في CRM */
+  updateCRMBalance(customerId, delta) {
+    const all = DB.getAll('crm_customers') || [];
+    let rec = all.find(c => c.id === customerId);
+    if (!rec) { rec = { id: customerId, interactions: [], sampleRequests: [], contacts: [] }; all.push(rec); }
+    rec.crmBalance = (rec.crmBalance || 0) + delta;
+    DB.set('crm_customers', all);
+  },
+
 };
 
 // ===== دوال الربط التلقائي بين الجداول =====

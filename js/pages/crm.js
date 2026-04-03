@@ -12,20 +12,26 @@ let _crmInteractionTypeFilter = ''; // فلتر نوع التفاعل
 
 // ===== أيقونات أنواع التفاعل =====
 const INTERACTION_ICONS = {
-  call:      '📞',
-  email:     '📧',
-  visit:     '🚗',
-  whatsapp:  '💬',
-  complaint: '⚠️',
+  call:         '📞',
+  email:        '📧',
+  visit:        '🚗',
+  whatsapp:     '💬',
+  complaint:    '⚠️',
+  sample:       '🧪',
+  quote_accept: '✅',
+  payment:      '💰',
 };
 
 // ===== تسميات أنواع التفاعل =====
 const INTERACTION_LABELS = {
-  call:      'مكالمة هاتفية',
-  email:     'بريد إلكتروني',
-  visit:     'زيارة ميدانية',
-  whatsapp:  'واتساب',
-  complaint: 'شكوى',
+  call:         'مكالمة هاتفية',
+  email:        'بريد إلكتروني',
+  visit:        'زيارة ميدانية',
+  whatsapp:     'واتساب',
+  complaint:    'شكوى',
+  sample:       'طلب عينة',
+  quote_accept: 'قبول عرض سعر',
+  payment:      'تسديد دفعة',
 };
 
 // ===== تسميات حالات طلبات العينات =====
@@ -526,6 +532,13 @@ function _renderCrmCardTab(tab, customerId, customer, crm) {
 // تبويب: البيانات الأساسية
 // ============================================
 function _renderTabBasic(customer, crm, customerId) {
+  // حساب إحصائيات المبيعات للعميل
+  const allOrders = DB.getAll('export_orders') || [];
+  const custOrders = allOrders.filter(o => o.customerId === customerId || String(o.customerId) === String(customerId));
+  const completedOrders = custOrders.filter(o => o.status === 'delivered' || o.status === 'paid');
+  const totalSales = custOrders.reduce((sum, o) => sum + (parseFloat(o.totalRevenue) || 0), 0);
+  const avgOrderValue = completedOrders.length > 0 ? (totalSales / completedOrders.length) : 0;
+
   return `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
       <!-- بيانات العميل الأساسية -->
@@ -538,6 +551,9 @@ function _renderTabBasic(customer, crm, customerId) {
           ${_infoRow('الهاتف',    customer.phone    || '—')}
           ${_infoRow('البريد',    customer.email    || '—')}
           ${_infoRow('العنوان',   customer.address  || '—')}
+          ${_infoRow('البلد',     customer.country  || '—')}
+          ${_infoRow('نوع العميل', customer.customerType || '—')}
+          ${_infoRow('العملة المفضلة', customer.preferredCurrency || '—')}
         </table>
       </div>
       <!-- بيانات CRM -->
@@ -553,6 +569,47 @@ function _renderTabBasic(customer, crm, customerId) {
         </table>
       </div>
     </div>
+
+    <!-- إحصائيات المبيعات -->
+    <div class="kpi-grid" style="margin-bottom:16px;grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">
+      <div class="kpi-card">
+        <div class="kpi-icon">📋</div>
+        <div class="kpi-body">
+          <div class="kpi-label">إجمالي أوامر التصدير</div>
+          <div class="kpi-value">${custOrders.length}</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon">✅</div>
+        <div class="kpi-body">
+          <div class="kpi-label">الأوامر المنجزة</div>
+          <div class="kpi-value">${completedOrders.length}</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon">💰</div>
+        <div class="kpi-body">
+          <div class="kpi-label">إجمالي المبيعات</div>
+          <div class="kpi-value" style="font-size:16px">${formatMoney(totalSales)}</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon">📊</div>
+        <div class="kpi-body">
+          <div class="kpi-label">متوسط قيمة الأمر</div>
+          <div class="kpi-value" style="font-size:16px">${formatMoney(avgOrderValue)}</div>
+        </div>
+      </div>
+      ${crm.lastExportOrderDate ? `
+      <div class="kpi-card">
+        <div class="kpi-icon">📅</div>
+        <div class="kpi-body">
+          <div class="kpi-label">آخر أمر تصدير</div>
+          <div class="kpi-value" style="font-size:14px">${formatDate(crm.lastExportOrderDate)}</div>
+        </div>
+      </div>` : ''}
+    </div>
+
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary" onclick="openEditCrmBasicModal(${customerId})">
         ✏️ تعديل البيانات
@@ -1030,6 +1087,7 @@ function openEditSampleModal(customerId, idx) {
 // ===== نموذج طلب العينة =====
 function _sampleFormHTML(customerId, idx, sr) {
   const today = new Date().toISOString().split('T')[0];
+  const slabs = DB.getAll('quality_records').filter(r => r.status === 'in_stock');
   return `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
       <div class="form-group">
@@ -1041,6 +1099,15 @@ function _sampleFormHTML(customerId, idx, sr) {
         <select id="sr-status">
           ${Object.entries(SAMPLE_STATUS_LABELS).map(([val, lbl]) =>
             `<option value="${val}" ${sr?.status===val?'selected':''}>${lbl}</option>`
+          ).join('')}
+        </select>
+      </div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label>اللوح المُرسل كعينة</label>
+        <select id="sr-slabId">
+          <option value="">— اختر لوحاً —</option>
+          ${slabs.map(s =>
+            `<option value="${s.id}" ${String(sr?.slabId) === String(s.id) ? 'selected' : ''}>${s.slabCode} (${s.color || ''} | ${GRADE_LABELS[s.qualityGrade] || s.qualityGrade})</option>`
           ).join('')}
         </select>
       </div>
@@ -1067,7 +1134,10 @@ function _saveSample(customerId, idx) {
   if (!items) { toast('الأصناف مطلوبة', 'error'); return; }
   if (!date)  { toast('التاريخ مطلوب', 'error'); return; }
 
+  const slabId = document.getElementById('sr-slabId')?.value || '';
+
   const crm = _getCrmRecord(customerId);
+  const newStatus = document.getElementById('sr-status').value;
   const newSr = {
     id:     idx !== null && idx !== 'null'
               ? (crm.sampleRequests[idx]?.id || Date.now())
@@ -1076,7 +1146,8 @@ function _saveSample(customerId, idx) {
                   : 1),
     date:   date,
     items:  sanitize(items),
-    status: document.getElementById('sr-status').value,
+    status: newStatus,
+    slabId: slabId,
     notes:  sanitize(document.getElementById('sr-notes').value.trim()),
   };
 
@@ -1087,6 +1158,12 @@ function _saveSample(customerId, idx) {
   }
 
   DB.save('crm_customers', crm);
+
+  // عند إرسال العينة: تحديث حالة اللوح
+  if (newStatus === 'sent' && slabId && typeof api !== 'undefined' && api.updateSlabStatus) {
+    api.updateSlabStatus(slabId, 'عينة مُرسلة');
+  }
+
   closeModal();
   toast('تم حفظ طلب العينة', 'success');
   _crmCardTab = 'samples';

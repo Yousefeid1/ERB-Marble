@@ -6,7 +6,10 @@
 'use strict';
 
 // ===== معاملات تسعير درجات الجودة الافتراضية =====
-const GRADE_MULTIPLIERS_DEFAULT = { A: 1.00, B: 0.75, C: 0.50, D: 0.25 };
+const GRADE_MULTIPLIERS_DEFAULT = { A: 1.00, B: 0.75, C: 0.50, D: 0.00 };
+
+// ===== تسميات درجات الجودة بالعربية =====
+const GRADE_LABELS = { A: 'درجة أولى', B: 'درجة ثانية', C: 'درجة ثالثة', D: 'مرفوض' };
 
 /** استرجاع معاملات الجودة من قاعدة البيانات أو القيم الافتراضية */
 function getGradeMultipliers() {
@@ -260,7 +263,7 @@ async function renderQuality() {
         <div class="kpi-sub">لوح مسجل في النظام</div>
       </div>
       <div class="kpi-card green">
-        <div class="kpi-label">جودة A — ممتاز</div>
+        <div class="kpi-label">درجة أولى (A)</div>
         <div class="kpi-value">${gradeA}</div>
         <div class="kpi-sub">${totalRecords ? ((gradeA / totalRecords) * 100).toFixed(1) : 0}% من الإجمالي</div>
       </div>
@@ -395,10 +398,10 @@ function _buildQualityCardsTab(records) {
         style="flex:1;min-width:200px">
       <select id="qcard-grade" onchange="filterQualityCards()">
         <option value="">كل درجات الجودة</option>
-        <option value="A">A — ممتاز</option>
-        <option value="B">B — جيد جداً</option>
-        <option value="C">C — جيد</option>
-        <option value="D">D — مقبول</option>
+        <option value="A">A — درجة أولى</option>
+        <option value="B">B — درجة ثانية</option>
+        <option value="C">C — درجة ثالثة</option>
+        <option value="D">D — مرفوض</option>
       </select>
       <select id="qcard-color" onchange="filterQualityCards()">
         <option value="">كل الألوان</option>
@@ -583,10 +586,10 @@ function _buildQualityListTab(records) {
         style="flex:1;min-width:200px">
       <select id="qlist-grade" onchange="filterQualityList()">
         <option value="">كل الجودات</option>
-        <option value="A">A — ممتاز</option>
-        <option value="B">B — جيد جداً</option>
-        <option value="C">C — جيد</option>
-        <option value="D">D — مقبول</option>
+        <option value="A">A — درجة أولى</option>
+        <option value="B">B — درجة ثانية</option>
+        <option value="C">C — درجة ثالثة</option>
+        <option value="D">D — مرفوض</option>
       </select>
       <select id="qlist-status" onchange="filterQualityList()">
         <option value="">كل الحالات</option>
@@ -672,6 +675,7 @@ function _qualityStatusBadge(status) {
     in_stock: ['badge-success', 'في المخزن'],
     sold:     ['badge-info',    'مباعة'],
     reserved: ['badge-warning', 'محجوزة'],
+    rejected: ['badge-danger',  'مرفوض — معزول'],
   };
   const [cls, label] = map[status] || ['badge-info', status || '-'];
   return `<span class="badge ${cls}">${label}</span>`;
@@ -751,6 +755,31 @@ function _buildQualityReportTab(records) {
     </tr>
   `).join('');
 
+  // ===== إحصائيات ملخص درجات الجودة =====
+  const total = records.length;
+  const gradeStats = ['A', 'B', 'C', 'D'].map(g => {
+    const count = records.filter(r => r.qualityGrade === g).length;
+    const value = records
+      .filter(r => r.qualityGrade === g && r.status !== 'rejected')
+      .reduce((sum, r) => sum + (r.costByGrade || 0), 0);
+    const pct   = total > 0 ? ((count / total) * 100).toFixed(1) : '0.0';
+    return { g, label: GRADE_LABELS[g], count, pct, value };
+  });
+  const totalValue = gradeStats.reduce((sum, s) => sum + s.value, 0);
+
+  const gradeSummaryRows = gradeStats.map(s => `
+    <tr>
+      <td>
+        <span style="background:${_qualityGradeColor(s.g)};color:#fff;
+          padding:3px 10px;border-radius:12px;font-weight:700;font-size:13px;margin-left:6px">${s.g}</span>
+        ${s.label}
+      </td>
+      <td style="text-align:center;font-weight:600">${s.count}</td>
+      <td style="text-align:center">${s.pct}%</td>
+      <td class="number" style="color:var(--accent);font-weight:600">${formatMoney(s.value)}</td>
+    </tr>
+  `).join('');
+
   return `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
 
@@ -772,32 +801,32 @@ function _buildQualityReportTab(records) {
         <h3 style="margin:0 0 8px;font-size:15px;font-weight:700">⚙️ معاملات تسعير درجات الجودة</h3>
         <p style="font-size:12px;color:var(--text-secondary);margin-bottom:16px">
           تحديد نسبة السعر الأساسي المطبقة على كل درجة جودة
-          (مثال: A=1.00 → 100% | B=0.75 → 75% | C=0.50 → 50% | D=0.25 → 25%)
+          (مثال: A=1.00 → 100% درجة أولى | B=0.75 → 75% درجة ثانية | C=0.50 → 50% درجة ثالثة | D=0.00 → 0% مرفوض)
         </p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
           <div class="form-group">
-            <label style="color:#4caf50;font-weight:700">🟢 الجودة A</label>
+            <label style="color:#4caf50;font-weight:700">🟢 درجة أولى (A) — 100%</label>
             <input type="number" id="gm-A" value="${multipliers.A}"
               min="0" max="5" step="0.05"
               style="border-color:#4caf50"
               placeholder="1.00">
           </div>
           <div class="form-group">
-            <label style="color:#2196f3;font-weight:700">🔵 الجودة B</label>
+            <label style="color:#2196f3;font-weight:700">🔵 درجة ثانية (B) — 75%</label>
             <input type="number" id="gm-B" value="${multipliers.B}"
               min="0" max="5" step="0.05"
               style="border-color:#2196f3"
               placeholder="0.75">
           </div>
           <div class="form-group">
-            <label style="color:#ff9800;font-weight:700">🟠 الجودة C</label>
+            <label style="color:#ff9800;font-weight:700">🟠 درجة ثالثة (C) — 50%</label>
             <input type="number" id="gm-C" value="${multipliers.C}"
               min="0" max="5" step="0.05"
               style="border-color:#ff9800"
               placeholder="0.50">
           </div>
           <div class="form-group">
-            <label style="color:#f44336;font-weight:700">🔴 الجودة D</label>
+            <label style="color:#f44336;font-weight:700">🔴 مرفوض (D) — 0%</label>
             <input type="number" id="gm-D" value="${multipliers.D}"
               min="0" max="5" step="0.05"
               style="border-color:#f44336"
@@ -836,6 +865,34 @@ function _buildQualityReportTab(records) {
         </table>
       </div>
     </div>
+
+    <!-- ===== جدول ملخص درجات الجودة ===== -->
+    <div class="card" style="padding:0" id="quality-grade-report">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border-color)">
+        <h3 style="margin:0;font-size:15px;font-weight:700">📊 ملخص درجات الجودة</h3>
+      </div>
+      <div class="data-table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>درجة الجودة</th>
+              <th style="text-align:center">عدد الألواح</th>
+              <th style="text-align:center">النسبة %</th>
+              <th style="text-align:center">إجمالي القيمة</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${gradeSummaryRows}
+            <tr style="background:var(--bg-input);font-weight:700">
+              <td>الإجمالي</td>
+              <td style="text-align:center">${total}</td>
+              <td style="text-align:center">100%</td>
+              <td class="number" style="color:var(--accent)">${formatMoney(totalValue)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   `;
 }
 
@@ -864,7 +921,7 @@ function _drawQualityPieChart() {
   window._qualityPieChart = new Chart(canvas.getContext('2d'), {
     type: 'pie',
     data: {
-      labels: ['A — ممتاز', 'B — جيد جداً', 'C — جيد', 'D — مقبول'],
+      labels: ['A — درجة أولى', 'B — درجة ثانية', 'C — درجة ثالثة', 'D — مرفوض'],
       datasets: [{
         data:            [counts.A, counts.B, counts.C, counts.D],
         backgroundColor: ['#4caf50', '#2196f3', '#ff9800', '#f44336'],
@@ -961,7 +1018,7 @@ function openQualityModal(id) {
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">
           ${['A', 'B', 'C', 'D'].map(g => {
             const color    = _qualityGradeColor(g);
-            const labels   = { A: 'ممتاز', B: 'جيد جداً', C: 'جيد', D: 'مقبول' };
+            const labels   = { A: 'درجة أولى', B: 'درجة ثانية', C: 'درجة ثالثة', D: 'مرفوض' };
             const selected = v.qualityGrade === g;
             return `
               <button type="button" id="qm-grade-${g}" onclick="selectQualityGrade('${g}')"
@@ -1057,9 +1114,10 @@ function openQualityModal(id) {
       <div class="form-group">
         <label>حالة اللوح</label>
         <select id="qm-status">
-          <option value="in_stock" ${v.status === 'in_stock' ? 'selected' : ''}>في المخزن</option>
-          <option value="sold"     ${v.status === 'sold'     ? 'selected' : ''}>مباعة</option>
-          <option value="reserved" ${v.status === 'reserved' ? 'selected' : ''}>محجوزة</option>
+          <option value="in_stock" ${v.status === 'in_stock'  ? 'selected' : ''}>في المخزن</option>
+          <option value="sold"     ${v.status === 'sold'      ? 'selected' : ''}>مباعة</option>
+          <option value="reserved" ${v.status === 'reserved'  ? 'selected' : ''}>محجوزة</option>
+          <option value="rejected" ${v.status === 'rejected'  ? 'selected' : ''}>مرفوض — معزول</option>
         </select>
       </div>
       <div class="form-group">
@@ -1083,6 +1141,22 @@ function openQualityModal(id) {
         <label>ملاحظات</label>
         <textarea id="qm-notes" rows="2"
           placeholder="ملاحظات إضافية...">${v.notes || ''}</textarea>
+      </div>
+
+      <!-- ===== بيانات الفرز ===== -->
+      <div class="form-group form-full">
+        <label>ملاحظات الفرز</label>
+        <textarea id="qm-sortingNotes" rows="2"
+          placeholder="ملاحظات خاصة بعملية الفرز...">${v.sortingNotes || ''}</textarea>
+      </div>
+      <div class="form-group">
+        <label>المسؤول عن الفرز</label>
+        <select id="qm-sortingResponsible">
+          <option value="">— اختر الموظف —</option>
+          ${DB.getAll('employees').map(emp =>
+            `<option value="${emp.id}" ${String(v.sortingResponsible) === String(emp.id) ? 'selected' : ''}>${emp.name || emp.email}</option>`
+          ).join('')}
+        </select>
       </div>
 
       <!-- ===== رفع الصور ===== -->
@@ -1285,13 +1359,30 @@ async function saveQualityRecord(id) {
     inspectedBy:     document.getElementById('qm-inspectedBy')?.value?.trim()     || '',
     inspectionDate:  document.getElementById('qm-inspectionDate')?.value          || '',
     notes:           document.getElementById('qm-notes')?.value?.trim()           || '',
+    sortingNotes:    document.getElementById('qm-sortingNotes')?.value?.trim()    || '',
+    sortingResponsible: document.getElementById('qm-sortingResponsible')?.value   || '',
     createdAt:       existing?.createdAt || new Date().toISOString(),
   };
 
   _saveQualityRecordDirect(record);
 
+  // ===== استدعاء API عند تغيير درجة الجودة =====
+  if (existing && existing.qualityGrade !== grade) {
+    if (typeof api !== 'undefined') {
+      if (api.updateSlabGrade) api.updateSlabGrade(record.slabId, grade);
+      if (grade === 'D' && api.moveSlabToRejected) {
+        api.moveSlabToRejected(record.slabId);
+      }
+    }
+    toast('تم تحديث درجة الجودة وتعديل قيمة المخزون تلقائياً', 'success');
+  } else {
+    closeModal();
+    toast(id ? 'تم تحديث سجل الجودة بنجاح' : 'تمت إضافة سجل الجودة بنجاح', 'success');
+    renderQuality();
+    return;
+  }
+
   closeModal();
-  toast(id ? 'تم تحديث سجل الجودة بنجاح' : 'تمت إضافة سجل الجودة بنجاح', 'success');
   renderQuality();
 }
 
