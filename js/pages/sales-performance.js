@@ -439,20 +439,9 @@ async function renderCommissionReport() {
       // الفواتير المرتبطة بهذا السيلز
       const spInvoices = sales.filter(s => String(s.salesperson_id) === String(sp.id));
 
-      // المتحصلات من المدفوعات المباشرة
-      let totalCollected = 0;
-      spInvoices.forEach(inv => {
-        const invPayments = payments.filter(p =>
-          String(p.party_id) === String(inv.customer_id) &&
-          (p.notes || '').includes(inv.invoice_number)
-        );
-        totalCollected += invPayments.reduce((s, p) => s + (p.amount || 0), 0);
-
-        // أيضاً المبلغ المدفوع من الفاتورة ذاتها
-        if (!invPayments.length) {
-          totalCollected += inv.paid_amount || 0;
-        }
-      });
+      // المتحصلات الفعلية: مجموع paid_amount من الفواتير مباشرة
+      // نستخدم paid_amount كمصدر موحد لتجنب التكرار
+      const totalCollected = spInvoices.reduce((sum, inv) => sum + (inv.paid_amount || 0), 0);
 
       // نسبة العمولة من بيانات المستخدم
       const rate = parseFloat(sp.commission_rate || 0);

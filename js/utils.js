@@ -22,12 +22,16 @@ function convertCurrency(amount, fromCurrency, toCurrency) {
   if (fromCurrency === toCurrency) return parseFloat(amount) || 0;
   const s = JSON.parse(localStorage.getItem('marble_db_settings') || '{}');
   const rate = parseFloat(s.exchange_rate || 31);
+  const amountNum = parseFloat(amount) || 0;
   // EGP → Foreign
-  if (fromCurrency === 'EGP' && toCurrency !== 'EGP') return (parseFloat(amount) || 0) / rate;
+  if (fromCurrency === 'EGP') return amountNum / rate;
   // Foreign → EGP
-  if (fromCurrency !== 'EGP' && toCurrency === 'EGP') return (parseFloat(amount) || 0) * rate;
-  // Foreign → Foreign (عبر EGP كعملة وسيطة)
-  return ((parseFloat(amount) || 0) * rate) / rate;
+  if (toCurrency === 'EGP') return amountNum * rate;
+  // Foreign → Foreign (تحويل عبر EGP كعملة وسيطة)
+  // تحويل العملة الأولى إلى EGP ثم إلى العملة الثانية
+  // ملاحظة: يفترض أن سعر الصرف لكلتا العملتين مقابل EGP هو نفسه (مبسّط)
+  const toEgp = amountNum * rate;
+  return toEgp / rate;
 }
 
 // ===== 8. حساب ضريبة القيمة المضافة =====

@@ -976,24 +976,41 @@ function globalSearch(term) {
     groups[r.cat].push(r);
   });
 
-  // بناء HTML مع تمييز المطابقة
-  const hl = (str) => str.replace(new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'),
-    '<span class="search-highlight">$1</span>');
-
   let html = '';
   for (const [cat, items] of Object.entries(groups)) {
     html += `<div class="search-category">${cat}</div>`;
     items.forEach(item => {
-      html += `<div class="search-result-item" onclick="navigateToEntity('${item.page}','${item.id}');closeGlobalSearch()">
+      // تمييز النص المطابق بشكل آمن
+      const safeTitle = sanitize ? sanitize(item.title) : item.title;
+      const safeSub   = sanitize ? sanitize(item.sub)   : item.sub;
+      const hlTitle = safeTitle.replace(
+        new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'),
+        '<span class="search-highlight">$1</span>'
+      );
+      // حفظ البيانات في data attributes لتجنب حقن الكود
+      html += `<div class="search-result-item"
+        data-page="${encodeURIComponent(item.page)}"
+        data-id="${encodeURIComponent(String(item.id))}"
+        style="cursor:pointer">
         <span class="sri-icon">${item.icon}</span>
         <div>
-          <div class="sri-title">${hl(item.title)}</div>
-          <div class="sri-sub">${item.sub}</div>
+          <div class="sri-title">${hlTitle}</div>
+          <div class="sri-sub">${safeSub}</div>
         </div>
       </div>`;
     });
   }
   wrap.innerHTML = html;
+
+  // تسجيل أحداث النقر بعد رسم النتائج (event delegation آمن)
+  wrap.querySelectorAll('.search-result-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const page = decodeURIComponent(el.dataset.page || '');
+      const id   = decodeURIComponent(el.dataset.id || '');
+      closeGlobalSearch();
+      if (page) navigateToEntity(page, id);
+    });
+  });
 }
 
 function closeGlobalSearch() {

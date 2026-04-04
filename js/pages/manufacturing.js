@@ -202,6 +202,7 @@ function renderManufacturingRows(stages) {
           </span>
         </td>
         <td class="number cost-sensitive-field">${formatMoney(totalCost)}</td>
+        <td>${formatDate(s.date)}</td>
         <td>
           <div style="display:flex;gap:4px">
             <button class="btn btn-secondary btn-sm" onclick="viewManufacturingStage(${s.id})">تفاصيل</button>
