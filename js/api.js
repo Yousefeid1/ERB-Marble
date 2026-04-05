@@ -205,8 +205,28 @@ const DB = {
     } catch { return null; }
   },
   set(key, value) {
-    localStorage.setItem('marble_db_' + key, JSON.stringify(value));
-    this._cache[key] = value;
+    // فحص سعة التخزين قبل الحفظ
+    const usage = getStorageUsage();
+    if (usage.percent >= 90) {
+      // عند تجاوز 90%: إظهار بانر دائم ومنع الحفظ
+      _showStorageCriticalBanner(usage.percent);
+      throw new Error(`مساحة التخزين ممتلئة (${usage.percent.toFixed(1)}٪) — يرجى تصدير نسخة احتياطية وحذف بعض البيانات`);
+    }
+    if (usage.percent >= 70) {
+      // عند تجاوز 70%: تحذير فقط ولكن يُسمح بالحفظ
+      _warnStorageUsage(usage.percent);
+    }
+    try {
+      localStorage.setItem('marble_db_' + key, JSON.stringify(value));
+      this._cache[key] = value;
+    } catch (e) {
+      // معالجة خطأ امتلاء التخزين
+      if (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014) {
+        _showStorageCriticalBanner(100);
+        throw new Error('امتلأت مساحة التخزين المحلي — يرجى تصدير نسخة احتياطية فوراً ثم مسح البيانات القديمة');
+      }
+      throw e;
+    }
   },
   init() {
     if (!this.get('seeded')) {
@@ -389,6 +409,215 @@ const DB = {
 
 DB.init();
 DB._initChannel();
+
+// ===== حماية سعة التخزين المحلي =====
+
+// فترة الانتظار بين تحذيرات التخزين (5 دقائق)
+const STORAGE_WARN_COOLDOWN_MS = 5 * 60 * 1000;
+// تأخير إعادة تحميل الصفحة بعد استعادة النسخة الاحتياطية (بالميلي ثانية)
+const BACKUP_RELOAD_DELAY_MS = 2500;
+// الحجم الأقصى الافتراضي لـ localStorage بوحدة بايت (5 MiB = 5242880 بايت)
+const STORAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * getStorageUsage()
+ * يحسب حجم البيانات المستخدمة في localStorage
+ * ويعيد { usedBytes, totalBytes, percent, usedMB }
+ * ملاحظة: الحساب تقريبي — يفترض بايتين لكل وحدة UTF-16
+ * (الرموز خارج BMP كالإيموجي تأخذ 4 بايت فعلياً)
+ */
+function getStorageUsage() {
+  let usedBytes = 0;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      const v = localStorage.getItem(k) || '';
+      // تقدير: كل وحدة UTF-16 تحتل بايتين (تقريبي)
+      usedBytes += (k.length + v.length) * 2;
+    }
+  } catch (_) {}
+  return {
+    usedBytes,
+    totalBytes:  STORAGE_MAX_BYTES,
+    usedMB:      (usedBytes / (1024 * 1024)).toFixed(2),
+    percent:     (usedBytes / STORAGE_MAX_BYTES) * 100,
+  };
+}
+
+// متغير للتحكم في معدل إرسال التحذيرات
+let _lastStorageWarnTime = 0;
+
+/**
+ * _warnStorageUsage(percent)
+ * يعرض toast تحذيري عند بلوغ نسبة التخزين 70%
+ * مقيَّد بمرة واحدة كل 5 دقائق لتجنب الإزعاج
+ */
+function _warnStorageUsage(percent) {
+  const now = Date.now();
+  if (now - _lastStorageWarnTime < STORAGE_WARN_COOLDOWN_MS) return;
+  _lastStorageWarnTime = now;
+  // استخدام showToast (معرَّفة في utils.js وapp.js)
+  if (typeof showToast === 'function') {
+    showToast(
+      `⚠️ مساحة التخزين وصلت ${percent.toFixed(0)}٪ — يُنصح بتصدير نسخة احتياطية`,
+      'warning'
+    );
+  }
+}
+
+// معرف البانر الدائم لتجنب التكرار
+const _STORAGE_BANNER_ID = '_storageCriticalBanner';
+
+/**
+ * _showStorageCriticalBanner(percent)
+ * يعرض بانر دائم في أعلى الصفحة عند بلوغ نسبة التخزين 90%
+ * يبقى ظاهراً حتى يُغلق يدوياً أو تنخفض النسبة
+ */
+function _showStorageCriticalBanner(percent) {
+  // تجنب إنشاء أكثر من بانر واحد
+  if (document.getElementById(_STORAGE_BANNER_ID)) return;
+  const banner = document.createElement('div');
+  banner.id = _STORAGE_BANNER_ID;
+  banner.setAttribute('style',
+    'position:fixed;top:0;right:0;left:0;z-index:99998;' +
+    'background:#c0392b;color:#fff;padding:10px 16px;' +
+    'font-family:Cairo,sans-serif;font-size:14px;direction:rtl;' +
+    'display:flex;align-items:center;justify-content:space-between;gap:8px;' +
+    'box-shadow:0 2px 8px rgba(0,0,0,.3)'
+  );
+  banner.innerHTML =
+    '<span>🚨 مساحة التخزين وصلت <strong>' + percent.toFixed(0) +
+    '٪</strong> — يجب تصدير نسخة احتياطية الآن لمنع فقدان البيانات</span>' +
+    '<div style="display:flex;gap:8px;flex-shrink:0">' +
+      '<button onclick="exportBackup()" ' +
+        'style="background:#fff;color:#c0392b;border:none;padding:6px 12px;' +
+               'border-radius:6px;cursor:pointer;font-family:Cairo,sans-serif;font-weight:700">' +
+        'تصدير نسخة احتياطية' +
+      '</button>' +
+      '<button onclick="document.getElementById(\'' + _STORAGE_BANNER_ID + '\')?.remove()" ' +
+        'style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);' +
+               'padding:6px 10px;border-radius:6px;cursor:pointer;font-family:Cairo,sans-serif">' +
+        '✕' +
+      '</button>' +
+    '</div>';
+  // أضف البانر فوق كل محتوى الصفحة
+  if (document.body) {
+    document.body.insertBefore(banner, document.body.firstChild);
+  } else {
+    // إذا لم يكن DOM جاهزاً بعد — انتظر
+    document.addEventListener('DOMContentLoaded', () => {
+      document.body.insertBefore(banner, document.body.firstChild);
+    }, { once: true });
+  }
+}
+
+/**
+ * exportBackup()
+ * يصدّر جميع بيانات localStorage بصيغة JSON مضغوطة
+ * مع طابع زمني للتمييز بين النسخ
+ */
+function exportBackup() {
+  try {
+    const backup = {
+      version:    '1.0',
+      exported_at: new Date().toISOString(),
+      app:        'Marble ERP',
+      data:       {},
+    };
+    // جمع كل مفاتيح قاعدة البيانات (تبدأ بـ marble_db_)
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('marble_db_')) {
+        try {
+          backup.data[k] = JSON.parse(localStorage.getItem(k));
+        } catch (_) {
+          backup.data[k] = localStorage.getItem(k);
+        }
+      }
+    }
+    // إنشاء ملف JSON وتحميله
+    const json = JSON.stringify(backup, null, 2);
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const ts   = new Date().toISOString().split('.')[0].replace(/[:.]/g, '-');
+    a.href     = url;
+    a.download = `marble_backup_${ts}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    // تسجيل وقت آخر نسخة احتياطية
+    localStorage.setItem('_lastBackup', new Date().toISOString());
+    if (typeof showToast === 'function') {
+      showToast('✅ تم تصدير النسخة الاحتياطية بنجاح', 'success');
+    }
+    // تحديث واجهة النسخ الاحتياطي إن وُجدت
+    if (typeof updateBackupUI === 'function') updateBackupUI();
+    // تسجيل النشاط إن كان api متاحاً
+    if (typeof api !== 'undefined' && typeof api.logActivity === 'function') {
+      api.logActivity('backup', 'system', 0, 'تصدير نسخة احتياطية كاملة');
+    }
+  } catch (e) {
+    if (typeof showToast === 'function') {
+      showToast('❌ فشل تصدير النسخة الاحتياطية: ' + e.message, 'error');
+    }
+  }
+}
+
+/**
+ * importBackup(file)
+ * يستعيد البيانات من ملف نسخة احتياطية JSON
+ * يطلب تأكيداً من المستخدم قبل الاستبدال
+ * @param {File} file - ملف JSON المُصدَّر مسبقاً بـ exportBackup()
+ */
+function importBackup(file) {
+  if (!file) {
+    // إنشاء input لاختيار الملف إذا لم يُمرَّر مباشرة
+    const inp = document.createElement('input');
+    inp.type   = 'file';
+    inp.accept = '.json,application/json';
+    inp.onchange = e => {
+      const f = e.target.files[0];
+      if (f) importBackup(f);
+    };
+    inp.click();
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const backup = JSON.parse(e.target.result);
+      // التحقق من صحة ملف النسخة الاحتياطية
+      if (!backup.data || typeof backup.data !== 'object') {
+        throw new Error('ملف النسخة الاحتياطية غير صالح');
+      }
+      // تأكيد المستخدم قبل الاستبدال
+      const confirmed = confirm(
+        `هل تريد استعادة النسخة الاحتياطية المُصدَّرة بتاريخ\n${backup.exported_at || 'غير معروف'}؟\n\n⚠️ سيتم استبدال جميع البيانات الحالية — هذا الإجراء لا يمكن التراجع عنه.`
+      );
+      if (!confirmed) return;
+      // استعادة البيانات إلى localStorage
+      let restoredCount = 0;
+      for (const [k, v] of Object.entries(backup.data)) {
+        try {
+          localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
+          restoredCount++;
+        } catch (_) {}
+      }
+      // مسح الكاش لإجبار إعادة القراءة
+      DB._cache = {};
+      if (typeof showToast === 'function') {
+        showToast(`✅ تمت استعادة ${restoredCount} مجموعة بيانات بنجاح — يرجى إعادة تحميل الصفحة`, 'success');
+      }
+      // إعادة تحميل الصفحة بعد لحظة لتطبيق البيانات الجديدة
+      setTimeout(() => location.reload(), BACKUP_RELOAD_DELAY_MS);
+    } catch (err) {
+      if (typeof showToast === 'function') {
+        showToast('❌ فشلت الاستعادة: ' + err.message, 'error');
+      }
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+}
 
 // ===== 10. فحص أمان الحذف =====
 /**
