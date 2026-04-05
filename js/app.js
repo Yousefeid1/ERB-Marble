@@ -320,7 +320,7 @@ function autoBackupCheck() {
   const last = localStorage.getItem('_lastBackup');
   // احسب المدة منذ آخر نسخة بالساعات
   const hoursSinceLast = last
-    ? Math.floor((Date.now() - new Date(last).getTime()) / 3600000)
+    ? Math.floor((Date.now() - Date.parse(last)) / 3600000)
     : Infinity;
 
   // إذا مرّ أكثر من 24 ساعة منذ آخر نسخة → تذكير مع زر التصدير

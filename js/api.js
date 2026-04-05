@@ -412,32 +412,39 @@ DB._initChannel();
 
 // ===== حماية سعة التخزين المحلي =====
 
+// فترة الانتظار بين تحذيرات التخزين (5 دقائق)
+const STORAGE_WARN_COOLDOWN_MS = 5 * 60 * 1000;
+// تأخير إعادة تحميل الصفحة بعد استعادة النسخة الاحتياطية (بالميلي ثانية)
+const BACKUP_RELOAD_DELAY_MS = 2500;
+// الحجم الأقصى الافتراضي لـ localStorage بوحدة بايت (5 MiB = 5242880 بايت)
+const STORAGE_MAX_BYTES = 5 * 1024 * 1024;
+
 /**
  * getStorageUsage()
  * يحسب حجم البيانات المستخدمة في localStorage
  * ويعيد { usedBytes, totalBytes, percent, usedMB }
- * الحد الأقصى الافتراضي هو 5 ميجابايت (5242880 بايت)
+ * ملاحظة: الحساب تقريبي — يفترض بايتين لكل وحدة UTF-16
+ * (الرموز خارج BMP كالإيموجي تأخذ 4 بايت فعلياً)
  */
 function getStorageUsage() {
-  const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
   let usedBytes = 0;
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       const v = localStorage.getItem(k) || '';
-      // كل حرف في JavaScript يحتل بايتين (UTF-16)
+      // تقدير: كل وحدة UTF-16 تحتل بايتين (تقريبي)
       usedBytes += (k.length + v.length) * 2;
     }
   } catch (_) {}
   return {
     usedBytes,
-    totalBytes:  MAX_BYTES,
+    totalBytes:  STORAGE_MAX_BYTES,
     usedMB:      (usedBytes / (1024 * 1024)).toFixed(2),
-    percent:     (usedBytes / MAX_BYTES) * 100,
+    percent:     (usedBytes / STORAGE_MAX_BYTES) * 100,
   };
 }
 
-// متغير للتحكم في معدل إرسال التحذيرات (مرة واحدة كل 5 دقائق)
+// متغير للتحكم في معدل إرسال التحذيرات
 let _lastStorageWarnTime = 0;
 
 /**
@@ -447,7 +454,7 @@ let _lastStorageWarnTime = 0;
  */
 function _warnStorageUsage(percent) {
   const now = Date.now();
-  if (now - _lastStorageWarnTime < 5 * 60 * 1000) return;
+  if (now - _lastStorageWarnTime < STORAGE_WARN_COOLDOWN_MS) return;
   _lastStorageWarnTime = now;
   // استخدام showToast (معرَّفة في utils.js وapp.js)
   if (typeof showToast === 'function') {
@@ -533,7 +540,7 @@ function exportBackup() {
     const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
-    const ts   = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const ts   = new Date().toISOString().split('.')[0].replace(/[:.]/g, '-');
     a.href     = url;
     a.download = `marble_backup_${ts}.json`;
     a.click();
@@ -602,7 +609,7 @@ function importBackup(file) {
         showToast(`✅ تمت استعادة ${restoredCount} مجموعة بيانات بنجاح — يرجى إعادة تحميل الصفحة`, 'success');
       }
       // إعادة تحميل الصفحة بعد لحظة لتطبيق البيانات الجديدة
-      setTimeout(() => location.reload(), 2500);
+      setTimeout(() => location.reload(), BACKUP_RELOAD_DELAY_MS);
     } catch (err) {
       if (typeof showToast === 'function') {
         showToast('❌ فشلت الاستعادة: ' + err.message, 'error');
