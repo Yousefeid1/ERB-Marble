@@ -496,10 +496,9 @@ const DB = {
   },
 };
 
-DB.init();
-DB._initChannel();
-
 // ===== حماية سعة التخزين المحلي =====
+// يجب تعريف هذه الثوابت قبل استدعاء DB.init() لأن DB.set() تستدعي getStorageUsage()
+// التي تعتمد على STORAGE_MAX_BYTES، وتعريفها بعد DB.init() يسبب خطأ TDZ (Temporal Dead Zone)
 
 // فترة الانتظار بين تحذيرات التخزين (5 دقائق)
 const STORAGE_WARN_COOLDOWN_MS = 5 * 60 * 1000;
@@ -507,6 +506,13 @@ const STORAGE_WARN_COOLDOWN_MS = 5 * 60 * 1000;
 const BACKUP_RELOAD_DELAY_MS = 2500;
 // الحجم الأقصى الافتراضي لـ localStorage بوحدة بايت (5 MiB = 5242880 بايت)
 const STORAGE_MAX_BYTES = 5 * 1024 * 1024;
+// متغير للتحكم في معدل إرسال التحذيرات
+let _lastStorageWarnTime = 0;
+// معرف البانر الدائم لتجنب التكرار
+const _STORAGE_BANNER_ID = '_storageCriticalBanner';
+
+DB.init();
+DB._initChannel();
 
 /**
  * getStorageUsage()
@@ -533,8 +539,7 @@ function getStorageUsage() {
   };
 }
 
-// متغير للتحكم في معدل إرسال التحذيرات
-let _lastStorageWarnTime = 0;
+// متغير للتحكم في معدل إرسال التحذيرات (مُعرَّف قبل DB.init أعلاه)
 
 /**
  * _warnStorageUsage(percent)
@@ -554,8 +559,7 @@ function _warnStorageUsage(percent) {
   }
 }
 
-// معرف البانر الدائم لتجنب التكرار
-const _STORAGE_BANNER_ID = '_storageCriticalBanner';
+// معرف البانر الدائم لتجنب التكرار (مُعرَّف قبل DB.init أعلاه)
 
 /**
  * _showStorageCriticalBanner(percent)
