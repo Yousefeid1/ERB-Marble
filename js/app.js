@@ -315,35 +315,42 @@ async function loadNotifications() {
   } catch(e) {}
 }
 
-// فحص وإنشاء نسخة احتياطية تلقائية يومية
+// فحص النسخ الاحتياطية وتذكير المستخدم
 function autoBackupCheck() {
   const last = localStorage.getItem('_lastBackup');
-  const daysSinceLast = last
-    ? Math.floor((new Date() - new Date(last)) / 86400000)
+  // احسب المدة منذ آخر نسخة بالساعات
+  const hoursSinceLast = last
+    ? Math.floor((Date.now() - new Date(last).getTime()) / 3600000)
     : Infinity;
-  if (!last || daysSinceLast > 1) {
-    // حفظ snapshot تلقائي من البيانات الأساسية
-    const snap = {};
-    ['customers','sales','purchases','payments','blocks','slabs']
-      .forEach(k => {
-        const v = localStorage.getItem('marble_db_' + k) || localStorage.getItem(k);
-        if (v) snap[k] = v;
-      });
-    localStorage.setItem('_autoSnapshot', JSON.stringify({
-      date: new Date().toISOString(), data: snap
-    }));
-    // تحذير بالغ إذا مرّ أكثر من 7 أيام دون نسخة احتياطية
-    if (daysSinceLast > 7) {
-      toast(
-        `⚠️ لم يتم عمل نسخة احتياطية منذ ${daysSinceLast === Infinity ? 'البداية' : daysSinceLast + ' يوم'} — يُنصح بالنسخ الآن!`,
-        'warning'
+
+  // إذا مرّ أكثر من 24 ساعة منذ آخر نسخة → تذكير مع زر التصدير
+  if (!last || hoursSinceLast > 24) {
+    const msg = hoursSinceLast === Infinity
+      ? 'لم يتم إنشاء نسخة احتياطية من قبل'
+      : `لم يتم عمل نسخة احتياطية منذ ${hoursSinceLast} ساعة`;
+
+    // عرض toast مع زر التصدير بعد ثانيتين من تحميل التطبيق
+    setTimeout(() => {
+      // إنشاء toast مخصص مع زر التصدير المباشر
+      const el = document.createElement('div');
+      el.className = 'toast warning';
+      el.setAttribute('style',
+        'display:flex;align-items:center;gap:10px;flex-wrap:wrap;max-width:380px'
       );
-    } else {
-      toast(
-        'لم يتم عمل نسخة احتياطية منذ أكثر من يوم ⚠️',
-        'warning'
-      );
-    }
+      el.innerHTML =
+        '<span>⚠️ ' + msg + '</span>' +
+        '<button onclick="exportBackup();this.closest(\'.toast\')?.remove()" ' +
+          'style="background:#fff;color:#ba7517;border:none;padding:4px 10px;' +
+                 'border-radius:6px;cursor:pointer;font-family:Cairo,sans-serif;' +
+                 'font-size:12px;white-space:nowrap">' +
+          'نسخ الآن' +
+        '</button>';
+      const container = document.getElementById('toast-container');
+      if (container) {
+        container.appendChild(el);
+        setTimeout(() => el.remove(), 8000);
+      }
+    }, 2000);
   }
 }
 
