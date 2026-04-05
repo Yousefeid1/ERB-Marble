@@ -65,8 +65,26 @@ function sanitize(str) {
   if (typeof str !== 'string') return str;
   // رفض النصوص التي تتجاوز الحد الأقصى المسموح
   if (str.length > 1000) throw new Error('النص طويل جداً — الحد الأقصى 1000 حرف');
-  return str
-    .replace(/<[^>]*>/g, '')        // إزالة وسوم HTML
+
+  // حماية متقدمة ضد DOM-based XSS: إزالة أنماط JavaScript خطيرة
+  const dangerous = [
+    /javascript\s*:/gi,
+    /vbscript\s*:/gi,
+    /on\w+\s*=/gi,          // أحداث مضمّنة مثل onclick=
+    /data\s*:\s*text\/html/gi,
+    /<\s*script[\s\S]*?>[\s\S]*?<\s*\/\s*script\s*>/gi,
+    /<\s*iframe[\s\S]*?>/gi,
+    /<\s*object[\s\S]*?>/gi,
+    /<\s*embed[\s\S]*?>/gi,
+    /expression\s*\(/gi,    // CSS expression()
+  ];
+  let cleaned = str;
+  for (const rx of dangerous) {
+    cleaned = cleaned.replace(rx, '');
+  }
+
+  return cleaned
+    .replace(/<[^>]*>/g, '')        // إزالة وسوم HTML المتبقية
     .replace(/&/g,  '&amp;')        // ترميز الرموز الخاصة لمنع XSS
     .replace(/</g,  '&lt;')
     .replace(/>/g,  '&gt;')

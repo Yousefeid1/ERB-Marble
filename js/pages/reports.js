@@ -1637,3 +1637,148 @@ function _renderCashFlowForecast() {
   return { labels, balances, colors };
 }
 
+
+
+// ============================================================
+// ===== تقييم المخزون: FIFO أو Weighted Average =====
+// ============================================================
+
+/**
+ * calcInventoryValuation(method, purchases, currentStock)
+ * @param {'fifo'|'wavg'} method - طريقة التقييم
+ * @param {Object[]} purchases  - فواتير الشراء { qty, unit_cost, date }
+ * @param {number}  currentStock - الكمية الحالية في المخزن
+ * @returns {{ totalValue, unitCost, method, details }}
+ */
+function calcInventoryValuation(method, purchases, currentStock) {
+  const sorted = [...purchases].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  if (method === 'wavg') {
+    // ===== المتوسط المرجح =====
+    const totalQty  = sorted.reduce((s, p) => s + (p.qty || 0), 0);
+    const totalCost = sorted.reduce((s, p) => s + (p.qty || 0) * (p.unit_cost || 0), 0);
+    const unitCost  = totalQty > 0 ? totalCost / totalQty : 0;
+    return {
+      method:     'المتوسط المرجح',
+      totalValue: unitCost * currentStock,
+      unitCost,
+      details:    sorted.map(p => ({
+        date:      p.date,
+        qty:       p.qty,
+        unit_cost: p.unit_cost,
+        total:     (p.qty || 0) * (p.unit_cost || 0),
+      })),
+    };
+  }
+
+  // ===== FIFO — أول داخل أول خارج =====
+  let remaining = currentStock;
+  let totalValue = 0;
+  const details  = [];
+
+  // نمشي من الأحدث للأقدم لإيجاد الكميات المتبقية
+  const reversed = [...sorted].reverse();
+  for (const p of reversed) {
+    if (remaining <= 0) break;
+    const used = Math.min(remaining, p.qty || 0);
+    totalValue += used * (p.unit_cost || 0);
+    details.push({ date: p.date, qty: used, unit_cost: p.unit_cost, total: used * p.unit_cost });
+    remaining  -= used;
+  }
+
+  const unitCost = currentStock > 0 ? totalValue / currentStock : 0;
+  return {
+    method:     'FIFO (أول داخل أول خارج)',
+    totalValue,
+    unitCost,
+    details,
+  };
+}
+
+/** عرض صفحة تقييم المخزون بالطريقة المختارة */
+async function renderInventoryValuation() {
+  const content = document.getElementById('page-content');
+  const savedMethod = localStorage.getItem('marble_inv_valuation') || 'wavg';
+
+  const products  = DB.getAll('products');
+  const purchases = DB.getAll('purchases');
+
+  // تجميع المشتريات لكل منتج
+  const purByProduct = {};
+  purchases.forEach(inv => {
+    if (!Array.isArray(inv.items)) return;
+    inv.items.forEach(item => {
+      if (!item.product_id) return;
+      if (!purByProduct[item.product_id]) purByProduct[item.product_id] = [];
+      purByProduct[item.product_id].push({
+        date:      inv.invoice_date || inv.date,
+        qty:       item.qty || 0,
+        unit_cost: item.unit_price || item.cost || 0,
+      });
+    });
+  });
+
+  const rows = products.map(p => {
+    const purs = purByProduct[p.id] || [{ date: new Date().toISOString(), qty: p.stock_qty, unit_cost: p.cost }];
+    const val  = calcInventoryValuation(savedMethod, purs, p.stock_qty);
+    return { ...p, val };
+  });
+
+  const totalValue = rows.reduce((s, r) => s + r.val.totalValue, 0);
+
+  content.innerHTML = `
+    <div class="page-header">
+      <div>
+        <h2>تقييم المخزون</h2>
+        <p>احتساب قيمة المخزون بطريقة FIFO أو المتوسط المرجح</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <label style="font-size:13px;color:var(--text-secondary)">طريقة التقييم:</label>
+        <select id="inv-valuation-method" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-input);color:var(--text-primary)"
+                onchange="_changeValuationMethod(this.value)">
+          <option value="wavg" ${savedMethod==='wavg'?'selected':''}>المتوسط المرجح</option>
+          <option value="fifo" ${savedMethod==='fifo'?'selected':''}>FIFO (أول داخل أول خارج)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="report-summary">
+      <div class="summary-box gold"><div class="label">إجمالي قيمة المخزون</div><div class="value">${formatMoney(totalValue)}</div></div>
+      <div class="summary-box"><div class="label">الطريقة المستخدمة</div><div class="value" style="font-size:14px">${savedMethod === 'fifo' ? 'FIFO' : 'متوسط مرجح'}</div></div>
+    </div>
+
+    <div class="card" style="padding:0">
+      <div class="data-table-wrapper">
+        <table>
+          <thead><tr>
+            <th>الكود</th><th>المنتج</th><th>الكمية</th><th>الوحدة</th>
+            <th>تكلفة الوحدة (محسوبة)</th><th>القيمة الإجمالية</th>
+          </tr></thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td class="number">${r.code}</td>
+                <td>${r.name}</td>
+                <td class="number">${r.stock_qty}</td>
+                <td>${r.unit}</td>
+                <td class="number">${formatMoney(r.val.unitCost)}</td>
+                <td class="number text-accent"><strong>${formatMoney(r.val.totalValue)}</strong></td>
+              </tr>
+            `).join('')}
+          </tbody>
+          <tfoot>
+            <tr style="border-top:2px solid var(--border);font-weight:700">
+              <td colspan="5" style="text-align:left;padding:8px 12px">الإجمالي</td>
+              <td class="number" style="color:var(--accent);font-size:15px">${formatMoney(totalValue)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function _changeValuationMethod(method) {
+  localStorage.setItem('marble_inv_valuation', method);
+  renderInventoryValuation();
+}

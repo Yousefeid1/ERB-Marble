@@ -187,21 +187,42 @@ function confirmDelete(message = 'هل أنت متأكد من الحذف؟ لا 
   return confirm(message);
 }
 
-// ===== ROLE-BASED ACCESS =====
-const ROLE_PAGES = {
-  'مدير عام':        null, // null = all pages visible
-  'مدير':            null,
-  'محاسب':           ['dashboard', 'journal', 'accounts', 'trial-balance', 'payments', 'expenses', 'report-pl', 'report-bs', 'report-waste', 'report-inventory', 'cost-centers', 'checks', 'year-closing', 'recurring-entries', 'settings', 'notifications'],
-  'موظف مبيعات':    ['dashboard', 'export', 'customers', 'crm', 'quotations', 'sales', 'notifications', 'slab-tracker'],
-  'مدير مبيعات':    ['dashboard', 'export', 'customers', 'crm', 'quotations', 'sales', 'payments', 'report-pl', 'report-customer-credit', 'notifications', 'slab-tracker'],
-  'موظف مشتريات':  ['dashboard', 'purchases', 'suppliers', 'blocks', 'slabs', 'payments', 'notifications', 'slab-tracker'],
-  'موظف تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'quality', 'manufacturing', 'notifications', 'slab-tracker'],
-  'مدير تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'quality', 'manufacturing', 'cost-centers', 'report-inventory', 'notifications', 'slab-tracker'],
-  'مشرف تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'quality', 'manufacturing', 'notifications', 'slab-tracker'],
-  'موظف لوجستيك':  ['dashboard', 'export', 'warehouses', 'shipments', 'shipment-report', 'notifications', 'slab-tracker'],
-  'مدير قسم':       ['dashboard', 'employees', 'activity-log', 'sales', 'customers', 'crm', 'export', 'report-pl', 'sales-performance', 'commissions', 'notifications', 'slab-tracker'],
-  'موظف عادي':      ['dashboard', 'notifications'],
-};
+// ===== ROLE-BASED ACCESS — مغلف بـ IIFE لمنع تجاوز الصلاحيات من الـ Console =====
+const RBACModule = (function () {
+  'use strict';
+
+  // متغيرات الصلاحيات خاصة ولا يمكن الوصول إليها من الـ Console
+  const _ROLE_PAGES = Object.freeze({
+    'مدير عام':        null, // null = all pages visible
+    'مدير':            null,
+    'محاسب':           ['dashboard', 'journal', 'accounts', 'trial-balance', 'payments', 'expenses', 'report-pl', 'report-bs', 'report-waste', 'report-inventory', 'cost-centers', 'checks', 'year-closing', 'recurring-entries', 'audit-trail', 'settings', 'notifications'],
+    'موظف مبيعات':    ['dashboard', 'export', 'customers', 'crm', 'quotations', 'sales', 'notifications', 'slab-tracker'],
+    'مدير مبيعات':    ['dashboard', 'export', 'customers', 'crm', 'quotations', 'sales', 'payments', 'report-pl', 'report-customer-credit', 'notifications', 'slab-tracker'],
+    'موظف مشتريات':  ['dashboard', 'purchases', 'suppliers', 'blocks', 'slabs', 'payments', 'notifications', 'slab-tracker'],
+    'موظف تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'quality', 'manufacturing', 'notifications', 'slab-tracker'],
+    'مدير تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'quality', 'manufacturing', 'cost-centers', 'report-inventory', 'notifications', 'slab-tracker'],
+    'مشرف تصنيع':    ['dashboard', 'blocks', 'cutting', 'slabs', 'quality', 'manufacturing', 'notifications', 'slab-tracker'],
+    'موظف لوجستيك':  ['dashboard', 'export', 'warehouses', 'shipments', 'shipment-report', 'notifications', 'slab-tracker'],
+    'مدير قسم':       ['dashboard', 'employees', 'activity-log', 'sales', 'customers', 'crm', 'export', 'report-pl', 'sales-performance', 'commissions', 'notifications', 'slab-tracker'],
+    'موظف عادي':      ['dashboard', 'notifications'],
+  });
+
+  /** التحقق من صلاحية الوصول لصفحة معينة */
+  function canAccess(role, page) {
+    const allowed = _ROLE_PAGES[role];
+    if (allowed === null || allowed === undefined) return true; // مدير عام / مدير
+    return Array.isArray(allowed) && allowed.includes(page);
+  }
+
+  /** إرجاع قائمة الصفحات المسموح بها للدور */
+  function getAllowedPages(role) {
+    const allowed = _ROLE_PAGES[role];
+    if (allowed === null || allowed === undefined) return null;
+    return Array.isArray(allowed) ? [...allowed] : null;
+  }
+
+  return Object.freeze({ canAccess, getAllowedPages });
+})();
 
 // ===== AUTH =====
 async function doLogin() {
@@ -357,7 +378,7 @@ function autoBackupCheck() {
 // ===== SIDEBAR ROLE FILTER =====
 function filterSidebarByRole() {
   const role    = currentUser?.role || 'مدير';
-  const allowed = ROLE_PAGES[role]; // null = admin sees all
+  const allowed = RBACModule.getAllowedPages(role); // null = admin sees all
 
   document.querySelectorAll('.nav-item[data-page]').forEach(item => {
     if (allowed === null) {
@@ -413,6 +434,7 @@ const pageTitles = {
   'report-bs':             'الميزانية العمومية',
   'report-waste':          'تقرير الهالك',
   'report-inventory':      'تقرير المخزون',
+  'inventory-valuation':   'تقييم المخزون (FIFO/متوسط مرجح)',
   'report-cashflow':       'تقرير التدفقات النقدية',
   'report-cost-per-meter': 'تقرير تكلفة المتر المصنع',
   'report-export-profit':  'تقرير ربحية التصدير',
@@ -433,6 +455,7 @@ const pageTitles = {
   'checks':             'إدارة الشيكات',
   'year-closing':       'إغلاق السنة المالية',
   'recurring-entries':  'القيود المتكررة',
+  'audit-trail':        'سجل التدقيق',
   'report-project-profit': 'تقرير ربحية المشاريع',
   'sales-performance': 'أداء المبيعات والسيلز',
   'commissions':       'إدارة العمولات',
@@ -446,8 +469,7 @@ let _currentPage = 'dashboard';
 function showPage(pageName) {
   // Access control: redirect to dashboard if user lacks permission
   const role    = currentUser?.role || 'مدير';
-  const allowed = ROLE_PAGES[role];
-  if (allowed !== null && pageName !== 'dashboard' && !allowed.includes(pageName)) {
+  if (!RBACModule.canAccess(role, pageName) && pageName !== 'dashboard') {
     pageName = 'dashboard';
   }
 
@@ -510,6 +532,7 @@ function showPage(pageName) {
     'checks':           renderChecks,
     'year-closing':     renderYearClosing,
     'recurring-entries': renderRecurringEntries,
+    'audit-trail':      renderAuditTrail,
     'machines':         () => {},  // removed — kept as stub to avoid errors
     'report-project-profit': renderReportProjectProfit,
     'sales-performance': renderSalesPerformance,
@@ -549,6 +572,8 @@ function _scheduleRefresh() {
         'slabs': renderSlabs, 'products': renderProducts, 'expenses': renderExpenses,
         'report-pl': renderReportPL, 'report-bs': renderReportBS, 'report-waste': renderReportWaste,
         'report-inventory': renderReportInventory,
+        'inventory-valuation': renderInventoryValuation,
+    'inventory-valuation': renderInventoryValuation,
         'report-cashflow': renderReportCashFlow, 'report-cost-per-meter': renderReportCostPerMeter,
         'report-export-profit': renderReportExportProfit, 'report-inv-movement': renderReportInventoryMovement,
         'report-customer-credit': renderReportCustomerCredit,
@@ -565,6 +590,7 @@ function _scheduleRefresh() {
         'checks': renderChecks,
         'year-closing': renderYearClosing,
         'recurring-entries': renderRecurringEntries,
+        'audit-trail': renderAuditTrail,
         'machines': () => {},
         'slab-tracker': renderSlabTracker,
       };

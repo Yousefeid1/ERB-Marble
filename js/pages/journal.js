@@ -939,3 +939,113 @@ function saveRecurringEntry() {
   renderRecurringEntries();
 }
 
+// ============================================================
+// ===== سجل التدقيق (Audit Trail) — غير قابل للحذف =====
+// ============================================================
+
+/** عرض صفحة سجل التدقيق */
+function renderAuditTrail() {
+  const content = document.getElementById('page-content');
+  const logs = JSON.parse(localStorage.getItem('marble_db_audit_trail') || '[]');
+  const sorted = [...logs].sort((a, b) => new Date(b.changed_at) - new Date(a.changed_at));
+
+  const entityNames = {
+    sales: 'فاتورة مبيعات', purchases: 'فاتورة مشتريات',
+    payments: 'دفعة', journal: 'قيد يومية',
+    journal_entries: 'قيد محاسبي', expenses: 'مصروف',
+  };
+
+  content.innerHTML = `
+    <div class="page-header">
+      <div>
+        <h2>📋 سجل التدقيق</h2>
+        <p>سجل غير قابل للتعديل لكل العمليات المالية</p>
+      </div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="audit-search" placeholder="بحث..." oninput="filterAuditTrail()"
+               style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;
+                      background:var(--bg-input);color:var(--text-primary)">
+      </div>
+    </div>
+
+    ${sorted.length === 0
+      ? '<div class="card"><div class="empty-state" style="padding:40px"><div class="empty-icon">📋</div><h3>لا توجد سجلات تدقيق</h3></div></div>'
+      : `<div class="card" style="padding:0">
+        <div class="data-table-wrapper">
+          <table id="audit-table">
+            <thead><tr>
+              <th>التاريخ والوقت</th>
+              <th>الجدول</th>
+              <th>المعرف</th>
+              <th>المعدِّل</th>
+              <th>التفاصيل</th>
+            </tr></thead>
+            <tbody id="audit-tbody">
+              ${sorted.map(log => `
+                <tr>
+                  <td class="number" style="font-size:12px">${formatDate(log.changed_at, true)}</td>
+                  <td><span class="badge badge-info">${entityNames[log.entity] || log.entity}</span></td>
+                  <td class="number">${log.entity_id}</td>
+                  <td>${log.changed_by || '—'}</td>
+                  <td>
+                    <button class="btn btn-secondary btn-sm"
+                            onclick="showAuditDiff(${JSON.stringify(log.id).replace(/"/g,"'")})"
+                            data-id="${log.id}">
+                      عرض التغييرات
+                    </button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        <p style="padding:8px 16px;font-size:11px;color:var(--text-muted)">
+          إجمالي سجلات التدقيق: ${logs.length}
+        </p>
+      </div>`}
+  `;
+  window._auditLogs = sorted;
+}
+
+function filterAuditTrail() {
+  const term = document.getElementById('audit-search').value.toLowerCase();
+  document.querySelectorAll('#audit-tbody tr').forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
+  });
+}
+
+function showAuditDiff(logId) {
+  const logs = JSON.parse(localStorage.getItem('marble_db_audit_trail') || '[]');
+  const log  = logs.find(l => String(l.id) === String(logId));
+  if (!log) { toast('السجل غير موجود', 'error'); return; }
+
+  const formatVal = (obj) => {
+    if (!obj) return '—';
+    return Object.entries(obj)
+      .filter(([k]) => !['id', 'created_at', 'updated_at'].includes(k))
+      .map(([k, v]) => `<tr><td style="color:var(--text-secondary);padding:2px 6px">${k}</td><td style="padding:2px 6px">${v ?? '—'}</td></tr>`)
+      .join('');
+  };
+
+  openModal('🔍 تفاصيل التغيير', `
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
+      بتاريخ <strong>${formatDate(log.changed_at, true)}</strong>
+      بواسطة <strong>${log.changed_by}</strong>
+    </p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="card" style="padding:12px">
+        <p style="color:var(--danger);font-weight:600;margin-bottom:8px;font-size:13px">🔴 القيمة القديمة</p>
+        <table style="width:100%;font-size:12px;border-collapse:collapse">
+          ${formatVal(log.old_value)}
+        </table>
+      </div>
+      <div class="card" style="padding:12px">
+        <p style="color:var(--success);font-weight:600;margin-bottom:8px;font-size:13px">🟢 القيمة الجديدة</p>
+        <table style="width:100%;font-size:12px;border-collapse:collapse">
+          ${formatVal(log.new_value)}
+        </table>
+      </div>
+    </div>
+  `);
+}
+

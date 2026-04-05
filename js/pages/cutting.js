@@ -173,18 +173,63 @@ async function renderCutting() {
   }
 }
 
+// ===== حساب إنتاجية النشر (Yield) بناءً على نوع الماكينة والهالك =====
+/**
+ * calcCuttingYield({ L, W, H, thickness, machineType })
+ * المعادلة: Yield = (L × W × H) / (Thickness + Kerf)
+ * Kerf: 3.5mm لـ Gang Saw، 0.5mm لـ Multi-Wire
+ */
+function calcCuttingYield({ L, W, H, thickness, machineType }) {
+  const kerf = machineType === 'multi_wire' ? 0.5 : 3.5;
+  if (!thickness || thickness <= 0) return 0;
+  return (L * W * H) / (parseFloat(thickness) + kerf);
+}
+
+function _updateCuttingYield() {
+  const mType  = document.getElementById('nc-machine-type')?.value || 'gang_saw';
+  const thick  = parseFloat(document.getElementById('nc-thickness')?.value) || 2;
+  const blockEl = document.getElementById('nc-block');
+  if (!blockEl || !blockEl.value) return;
+  const blocks  = window._cuttingBlocks || [];
+  const blk     = blocks.find(b => b.id === parseInt(blockEl.value));
+  if (!blk) return;
+  const L = (blk.length || 0) / 100;  // سم → متر
+  const W = (blk.width  || 0) / 100;
+  const H = (blk.height || 0) / 100;
+  const yieldM2 = calcCuttingYield({ L, W, H, thickness: thick / 100, machineType: mType });
+  const kerf    = mType === 'multi_wire' ? 0.5 : 3.5;
+  const el = document.getElementById('nc-yield-display');
+  if (el) el.innerHTML =
+    `<span style="color:var(--accent)">⚙ الإنتاجية المتوقعة: <strong>${yieldM2.toFixed(1)} م²</strong></span>` +
+    `<span style="color:var(--text-secondary);font-size:11px;margin-right:8px">| Kerf: ${kerf} مم</span>`;
+}
+
 function openNewCuttingModal() {
   const blocks = window._cuttingBlocks || [];
   openModal('عملية نشر جديدة', `
     <div class="form-grid">
       <div class="form-group">
         <label>الكتلة الخام *</label>
-        <select id="nc-block">
+        <select id="nc-block" onchange="_updateCuttingYield()">
           <option value="">اختر الكتلة</option>
           ${blocks.map(b => `<option value="${b.id}" data-code="${b.code}" data-type="${b.type}">${b.code} - ${b.type}</option>`).join('')}
         </select>
       </div>
       <div class="form-group"><label>التاريخ *</label><input type="date" id="nc-date" value="${new Date().toISOString().split('T')[0]}"></div>
+      <div class="form-group">
+        <label>نوع الماكينة *</label>
+        <select id="nc-machine-type" onchange="_updateCuttingYield()">
+          <option value="gang_saw">Gang Saw (منشار حزمة) — Kerf 3.5 مم</option>
+          <option value="multi_wire">Multi-Wire (سلك متعدد) — Kerf 0.5 مم</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>سماكة اللوح (مم)</label>
+        <input type="number" id="nc-thickness" min="0.5" step="0.5" value="20" oninput="_updateCuttingYield()">
+      </div>
+      <div class="form-group form-full">
+        <div id="nc-yield-display" style="padding:8px;background:var(--bg-secondary);border-radius:6px;font-size:13px;direction:rtl"></div>
+      </div>
       <div class="form-group"><label>المشرف المسؤول</label><input type="text" id="nc-operator" placeholder="اسم المشرف"></div>
       <div class="form-group"><label>المصنع المنفّذ</label><input type="text" id="nc-factory" placeholder="اسم المصنع الخارجي"></div>
       <div class="form-group"><label>تكلفة النشر لكل متر (ج.م)</label><input type="number" id="nc-cost-per-meter" min="0" step="0.01" value="0"></div>
@@ -204,22 +249,37 @@ function openNewCuttingModal() {
 async function saveCutting() {
   const blockEl = document.getElementById('nc-block');
   if (!blockEl.value) { toast('الرجاء اختيار الكتلة الخام', 'error'); return; }
-  const slabs  = parseInt(document.getElementById('nc-slabs').value) || 0;
-  const waste  = parseInt(document.getElementById('nc-waste').value) || 0;
-  const wasteP = slabs > 0 ? (waste / slabs * 100) : 0;
-  const gradeA = parseInt(document.getElementById('nc-grade-a').value) || 0;
-  const gradeB = parseInt(document.getElementById('nc-grade-b').value) || 0;
-  const gradeC = parseInt(document.getElementById('nc-grade-c').value) || 0;
-  const blockId   = parseInt(blockEl.value);
-  const blockCode = blockEl.options[blockEl.selectedIndex].dataset.code;
-  const blockType = blockEl.options[blockEl.selectedIndex].dataset.type;
-  const date      = document.getElementById('nc-date').value;
+  const slabs       = parseInt(document.getElementById('nc-slabs').value) || 0;
+  const waste       = parseInt(document.getElementById('nc-waste').value) || 0;
+  const wasteP      = slabs > 0 ? (waste / slabs * 100) : 0;
+  const gradeA      = parseInt(document.getElementById('nc-grade-a').value) || 0;
+  const gradeB      = parseInt(document.getElementById('nc-grade-b').value) || 0;
+  const gradeC      = parseInt(document.getElementById('nc-grade-c').value) || 0;
+  const machineType = document.getElementById('nc-machine-type')?.value || 'gang_saw';
+  const thicknessMm = parseFloat(document.getElementById('nc-thickness')?.value) || 20;
+  const kerfMm      = machineType === 'multi_wire' ? 0.5 : 3.5;
+  const blockId     = parseInt(blockEl.value);
+  const blockCode   = blockEl.options[blockEl.selectedIndex].dataset.code;
+  const blockType   = blockEl.options[blockEl.selectedIndex].dataset.type;
+  const date        = document.getElementById('nc-date').value;
+
+  // حساب الإنتاجية
+  const blocks = window._cuttingBlocks || [];
+  const blk    = blocks.find(b => b.id === blockId) || {};
+  const L = (blk.length || 0) / 100;
+  const W = (blk.width  || 0) / 100;
+  const H = (blk.height || 0) / 100;
+  const yieldM2 = calcCuttingYield({ L, W, H, thickness: thicknessMm / 1000, machineType });
 
   const cut = await api.createCutting({
     block_id:         blockId,
     block_code:       blockCode,
     block_type:       blockType,
     date,
+    machine_type:     machineType,
+    kerf_loss_mm:     kerfMm,
+    thickness_mm:     thicknessMm,
+    yield_m2:         parseFloat(yieldM2.toFixed(2)),
     operator:         document.getElementById('nc-operator').value,
     factory:          document.getElementById('nc-factory').value,
     cost_per_meter:   parseFloat(document.getElementById('nc-cost-per-meter').value) || 0,
@@ -312,7 +372,11 @@ function renderSlabRows(slabs) {
     const stLabel = statusLabel[s.status] || s.status;
     return `
       <tr>
-        <td class="number"><strong>${s.code}</strong></td>
+        <td class="number">
+          <strong>${s.code}</strong>
+          <button class="btn btn-secondary btn-sm" style="margin-right:4px;padding:2px 6px;font-size:11px"
+                  onclick="showSlabQR(${s.id})" title="عرض QR Code اللوح">🔲</button>
+        </td>
         <td class="number">${buildNavLink(s.block_code, 'cutting', s.block_id)}</td>
         <td>${s.type}</td>
         <td><span class="badge ${grCls}">${s.grade}</span></td>
@@ -387,4 +451,67 @@ function exportSlabsExcel() {
   const rows = slabs.map(s => [s.code, s.block_code, s.type, s.grade, s.width, s.height, s.thickness, s.area_m2||0, statusLabel[s.status] || s.status]);
   const totalArea = slabs.filter(s => s.status === 'in_stock' || s.status === 'متاح').reduce((sum, s) => sum + (s.area_m2||0), 0);
   exportGenericExcel({ sheetName: 'الألواح', headers, rows, totalsRow: ['', '', '', '', '', '', 'المتاح (م²)', totalArea, ''], filename: `slabs-${new Date().toISOString().split('T')[0]}.xlsx` });
+}
+
+// ============================================================
+// ===== QR Code للألواح — وصول سريع عبر الهاتف =====
+// ============================================================
+
+/**
+ * showSlabQR(slabId)
+ * يعرض QR Code فريد لكل لوح يتيح الوصول السريع لبياناته
+ */
+function showSlabQR(slabId) {
+  const slab = DB.findById('slabs', slabId);
+  if (!slab) { toast('اللوح غير موجود', 'error'); return; }
+
+  const statusMap = {
+    'in_stock': 'متاح', 'متاح': 'متاح',
+    'sold': 'تم شحنه', 'تم شحنه': 'تم شحنه',
+    'محجوز': 'محجوز', 'waste': 'الفاقد',
+  };
+
+  // بيانات اللوح في QR
+  const payload = JSON.stringify({
+    slab_id:    slab.id,
+    code:       slab.code,
+    type:       slab.type,
+    grade:      slab.grade,
+    status:     statusMap[slab.status] || slab.status,
+    area_m2:    (slab.area_m2 || 0).toFixed(2),
+    width:      slab.width,
+    height:     slab.height,
+    thickness:  slab.thickness,
+    block_code: slab.block_code,
+  });
+
+  openModal(`🔲 QR Code — لوح ${slab.code}`, `
+    <div style="text-align:center;padding:16px">
+      <div id="slab-qr-container" style="display:inline-block;padding:12px;background:#fff;border-radius:8px"></div>
+      <div style="margin-top:12px;font-size:12px;color:var(--text-secondary)">
+        <strong>${slab.code}</strong> — ${slab.type} — ${slab.grade}<br>
+        ${(slab.area_m2 || 0).toFixed(2)} م² | ${statusMap[slab.status] || slab.status}
+      </div>
+      <p style="font-size:11px;color:var(--text-muted);margin-top:8px">
+        وجّه كاميرا الهاتف نحو الكود لعرض بيانات اللوح
+      </p>
+    </div>
+  `);
+
+  setTimeout(() => {
+    const container = document.getElementById('slab-qr-container');
+    if (!container) return;
+    if (typeof QRCode !== 'undefined') {
+      new QRCode(container, {
+        text:         payload,
+        width:        160,
+        height:       160,
+        colorDark:    '#1a1d2e',
+        colorLight:   '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M,
+      });
+    } else {
+      container.innerHTML = `<code style="font-size:10px;direction:ltr;word-break:break-all;max-width:200px;display:block">${payload}</code>`;
+    }
+  }, 100);
 }

@@ -14,6 +14,189 @@ function calcHandlingCost(workers, hours) {
     laborCost:    workers * hours * HANDLING_RATES.labor,
   };
 }
+
+// ===== أنواع المنتجات الفرعية من الدرجة D (الهالك) =====
+const OFFCUT_PRODUCT_TYPES = ['موزاييك', 'بلاط صغير', 'حجر زخرفي', 'تراب رخام'];
+
+// ===== توزيع التكاليف غير المباشرة (ABC) =====
+/**
+ * calcABCCostAllocation(stageId, indirectCosts)
+ * يوزع التكاليف غير المباشرة (كهرباء، استهلاك فصوص الماس)
+ * على المراحل بناءً على ساعات تشغيل الماكينات
+ * @param {Object[]} stages - مراحل التصنيع
+ * @param {number}   indirectCosts - إجمالي التكاليف غير المباشرة (ج.م)
+ * @returns {Object[]} - مراحل مع تكلفة ABC مخصصة لكل منها
+ */
+function calcABCCostAllocation(stages, indirectCosts) {
+  const totalHours = stages.reduce((sum, s) => sum + (s.machineHours || 1), 0);
+  if (totalHours <= 0) return stages.map(s => ({ ...s, abcCost: 0 }));
+  return stages.map(s => ({
+    ...s,
+    abcCost: ((s.machineHours || 1) / totalHours) * indirectCosts,
+  }));
+}
+
+/**
+ * showABCAllocationModal()
+ * يعرض نافذة توزيع التكاليف غير المباشرة على مراحل التصنيع
+ */
+function showABCAllocationModal() {
+  const stages = DB.getAll('manufacturing_stages');
+  if (!stages.length) {
+    toast('لا توجد مراحل تصنيع لتوزيع التكاليف عليها', 'warning'); return;
+  }
+  openModal('توزيع التكاليف غير المباشرة (ABC)', `
+    <div style="margin-bottom:12px">
+      <label style="display:block;margin-bottom:6px;font-weight:600">إجمالي التكاليف غير المباشرة (ج.م)</label>
+      <div style="display:flex;gap:8px">
+        <input type="number" id="abc-indirect" min="0" step="100" value="0"
+               style="flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;
+                      background:var(--bg-input);color:var(--text-primary)">
+        <button class="btn btn-primary btn-sm" onclick="_renderABCTable()">حساب</button>
+      </div>
+      <p style="font-size:11px;color:var(--text-muted);margin-top:4px">
+        مثال: فاتورة الكهرباء + استهلاك فصوص الماس + صيانة الماكينات
+      </p>
+    </div>
+    <div id="abc-result"></div>
+  `);
+}
+
+function _renderABCTable() {
+  const indirect = parseFloat(document.getElementById('abc-indirect').value) || 0;
+  const stages   = DB.getAll('manufacturing_stages');
+  const allocated = calcABCCostAllocation(stages, indirect);
+  const rows = allocated.map(s => {
+    const name = s.customStage || s.stage;
+    const directTotal = (s.directCost || 0) + (s.laborCost || 0) +
+                        (s.materialCost || 0) + (s.transportCost || 0);
+    return `<tr>
+      <td>${s.blockId}</td>
+      <td>${name}</td>
+      <td class="number">${(s.machineHours || 1).toFixed(1)} س</td>
+      <td class="number">${formatMoney(directTotal)}</td>
+      <td class="number text-warning">${formatMoney(s.abcCost)}</td>
+      <td class="number text-success">${formatMoney(directTotal + s.abcCost)}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('abc-result').innerHTML = `
+    <div class="data-table-wrapper" style="max-height:50vh;overflow:auto">
+      <table>
+        <thead><tr>
+          <th>الكتلة</th><th>المرحلة</th><th>ساعات الماكينة</th>
+          <th>التكاليف المباشرة</th><th>التكاليف غير المباشرة (ABC)</th>
+          <th>الإجمالي</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <p style="font-size:11px;color:var(--text-muted);margin-top:8px">
+      * لتسجيل ساعات الماكينة لكل مرحلة، أضف الحقل machineHours عند إدخال المرحلة
+    </p>
+  `;
+}
+
+// ===== تحويل درجة D (مرفوض) إلى منتجات فرعية =====
+/**
+ * openOffcutConversionModal(stageId)
+ * يفتح نافذة لتحويل الألواح المرفوضة (Grade D) إلى منتجات فرعية
+ */
+function openOffcutConversionModal(stageId) {
+  const stage = DB.findById('manufacturing_stages', stageId);
+  if (!stage) { toast('المرحلة غير موجودة', 'error'); return; }
+  if (stage.qualityGrade !== 'مرفوض' && stage.qualityGrade !== 'D') {
+    toast('يمكن التحويل فقط للألواح ذات الدرجة D (مرفوض)', 'warning'); return;
+  }
+  const wasteQty = stage.wasteQuantity || stage.outputQuantity || 0;
+  const productOpts = OFFCUT_PRODUCT_TYPES.map(t => `<option value="${t}">${t}</option>`).join('');
+
+  openModal('♻️ تحويل هالك إلى منتج فرعي', `
+    <p style="margin-bottom:12px;color:var(--text-secondary);font-size:13px">
+      تحويل <strong>${wasteQty.toFixed(2)} ${stage.outputUnit || 'م²'}</strong>
+      من الدرجة D إلى خامة منتج فرعي قابلة للبيع
+    </p>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>نوع المنتج الفرعي *</label>
+        <select id="ofc-type">${productOpts}</select>
+      </div>
+      <div class="form-group">
+        <label>الكمية المُحوَّلة (م²)</label>
+        <input type="number" id="ofc-qty" min="0" step="0.01" value="${wasteQty.toFixed(2)}" max="${wasteQty}">
+      </div>
+      <div class="form-group">
+        <label>تكلفة إعادة التصنيع (ج.م)</label>
+        <input type="number" id="ofc-reprocess-cost" min="0" step="0.01" value="0">
+      </div>
+      <div class="form-group">
+        <label>سعر البيع المقترح (ج.م / م²)</label>
+        <input type="number" id="ofc-price" min="0" step="0.01" value="0">
+      </div>
+      <div class="form-group form-full">
+        <label>ملاحظات</label>
+        <textarea id="ofc-notes" rows="2" placeholder="ملاحظات إضافية..."></textarea>
+      </div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="closeModal()">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveOffcutConversion(${stageId})">♻️ تحويل</button>
+    </div>
+  `);
+}
+
+function saveOffcutConversion(stageId) {
+  const stage = DB.findById('manufacturing_stages', stageId);
+  if (!stage) return;
+
+  const productType   = document.getElementById('ofc-type').value;
+  const qty           = parseFloat(document.getElementById('ofc-qty').value) || 0;
+  const reprocessCost = parseFloat(document.getElementById('ofc-reprocess-cost').value) || 0;
+  const salePrice     = parseFloat(document.getElementById('ofc-price').value) || 0;
+  const notes         = document.getElementById('ofc-notes').value;
+
+  if (qty <= 0) { toast('الرجاء إدخال كمية صحيحة', 'error'); return; }
+
+  // إنشاء منتج فرعي جديد في جدول المنتجات
+  const newProductId = DB.nextId('products');
+  DB.save('products', {
+    id:         newProductId,
+    code:       'OFC-' + Date.now().toString(36).toUpperCase(),
+    name:       productType + ' من كتلة ' + stage.blockId,
+    category:   'منتج فرعي',
+    unit:       stage.outputUnit || 'م²',
+    price:      salePrice,
+    cost:       reprocessCost,
+    stock_qty:  qty,
+    min_stock:  0,
+    status:     'in_stock',
+    source_stage_id: stageId,
+    notes,
+  });
+
+  // تحديث المرحلة لتسجيل أنه تم التحويل
+  stage.offcut_converted  = true;
+  stage.offcut_product_id = newProductId;
+  stage.offcut_qty        = qty;
+  stage.offcut_type       = productType;
+  DB.save('manufacturing_stages', stage);
+
+  // قيد محاسبي: مخزون منتجات فرعية (مدين) / هالك تصنيع (دائن)
+  if (reprocessCost > 0) {
+    try {
+      createAutoJournal({
+        debit:  'مخزون منتجات فرعية',
+        credit: 'تكاليف تصنيع',
+        amount: reprocessCost,
+        ref:    'OFC-' + stageId,
+        date:   new Date().toISOString().split('T')[0],
+      });
+    } catch (_) {}
+  }
+
+  closeModal();
+  toast(`✅ تم تحويل ${qty} م² إلى ${productType} بنجاح`, 'success');
+  renderManufacturing();
+}
 const MANUFACTURING_STAGES = [
   'نشر الرخام',
   'نشر الجرانيت',
@@ -92,6 +275,7 @@ function renderManufacturing() {
         <p>تتبع وإدارة مراحل تصنيع الرخام والجرانيت</p>
       </div>
       <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="showABCAllocationModal()">📊 توزيع ABC</button>
         <button class="btn btn-secondary" onclick="showProductionChainModal()">🔗 سلسلة الإنتاج</button>
         <button class="btn btn-primary"   onclick="openAddStageModal()">＋ إضافة مرحلة</button>
       </div>
@@ -204,8 +388,12 @@ function renderManufacturingRows(stages) {
         <td class="number cost-sensitive-field">${formatMoney(totalCost)}</td>
         <td>${formatDate(s.date)}</td>
         <td>
-          <div style="display:flex;gap:4px">
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
             <button class="btn btn-secondary btn-sm" onclick="viewManufacturingStage(${s.id})">تفاصيل</button>
+            ${(s.qualityGrade === 'مرفوض' || s.qualityGrade === 'D') && !s.offcut_converted
+              ? `<button class="btn btn-warning btn-sm" onclick="openOffcutConversionModal(${s.id})" title="تحويل إلى منتج فرعي">♻️</button>`
+              : (s.offcut_converted ? `<span class="badge badge-success" style="font-size:10px">♻️ مُحوَّل</span>` : '')
+            }
             <button class="btn btn-danger btn-sm"    onclick="deleteManufacturingStage(${s.id})">حذف</button>
           </div>
         </td>

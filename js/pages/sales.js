@@ -237,7 +237,25 @@ async function viewSaleDetail(id) {
       <div style="display:flex;justify-content:space-between"><span>المتبقي:</span><strong class="text-danger">${formatMoney(s.total_amount - s.paid_amount)}</strong></div>
     </div>
     ${s.notes ? `<p style="margin-top:12px;color:var(--text-secondary)">ملاحظات: ${s.notes}</p>` : ''}
+
+    <!-- ETA e-Invoice Fields -->
+    <div style="margin-top:16px;padding:12px;background:rgba(200,169,110,0.06);border:1px solid var(--border);border-radius:8px">
+      <p style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:8px">🔐 بيانات الفاتورة الإلكترونية (ETA)</p>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">
+        UUID: <code style="font-size:11px;direction:ltr;display:inline-block">${s.uuid || '—'}</code>
+      </div>
+      <div id="eta-qr-${s.id}" style="margin-top:8px;display:flex;gap:12px;align-items:center">
+        <div id="qr-container-${s.id}"></div>
+        <button class="btn btn-secondary btn-sm" onclick="_generateETAQR(${s.id})">
+          🔲 توليد QR Code
+        </button>
+      </div>
+    </div>
   `);
+  // تحميل QR إذا كان محفوظاً مسبقاً
+  if (s.eta_qr) {
+    setTimeout(() => { _renderETAQRFromData(s.id, s.eta_qr); }, 100);
+  }
 }
 
 function openNewSaleModal() {
@@ -380,6 +398,9 @@ async function saveSale() {
       : null,
     salesperson_id:   spId,
     salesperson_name: spName,
+    // ETA e-invoice fields
+    uuid: (typeof MarbleIDB !== 'undefined') ? MarbleIDB.generateUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2)),
+    eta_qr: null,
     items, subtotal, tax, total_amount: subtotal + tax, paid_amount: 0,
   });
   closeModal();
@@ -962,4 +983,65 @@ function printQuotationPDF(id) {
   if (!win) { toast('يرجى السماح بالنوافذ المنبثقة', 'error'); return; }
   win.document.write(html);
   win.document.close();
+}
+
+// ============================================================
+// ===== ETA e-Invoice — توليد QR Code للفاتورة الإلكترونية =====
+// ============================================================
+
+/**
+ * _generateETAQR(invoiceId)
+ * يولّد QR Code يحمل بيانات الفاتورة بتنسيق JSON وفق معايير GS1/ETA
+ */
+function _generateETAQR(invoiceId) {
+  const inv = DB.findById('sales', invoiceId);
+  if (!inv) { toast('الفاتورة غير موجودة', 'error'); return; }
+
+  // بناء بيانات الفاتورة الإلكترونية وفق تنسيق ETA المصري
+  const settings    = DB.get('settings') || {};
+  const etaPayload  = JSON.stringify({
+    uuid:            inv.uuid || inv.id,
+    invoice_number:  inv.invoice_number,
+    issue_date:      inv.invoice_date,
+    supplier_name:   settings.company_name || 'الشركة',
+    supplier_tax_id: settings.tax_id || '',
+    buyer_name:      inv.customer,
+    net_amount:      (inv.subtotal || 0).toFixed(2),
+    tax_amount:      (inv.tax || 0).toFixed(2),
+    total_amount:    (inv.total_amount || 0).toFixed(2),
+    currency:        inv.currency || 'EGP',
+  });
+
+  const containerId = 'qr-container-' + invoiceId;
+  const container   = document.getElementById(containerId);
+  if (!container) return;
+
+  container.innerHTML = '';
+  if (typeof QRCode !== 'undefined') {
+    new QRCode(container, {
+      text:          etaPayload,
+      width:         120,
+      height:        120,
+      colorDark:     '#1a1d2e',
+      colorLight:    '#ffffff',
+      correctLevel:  QRCode.CorrectLevel.M,
+    });
+    // حفظ QR كـ data URL في الفاتورة
+    setTimeout(() => {
+      const img = container.querySelector('img');
+      if (img) {
+        inv.eta_qr = img.src;
+        DB.save('sales', inv);
+        toast('✅ تم توليد QR Code وحفظه في الفاتورة', 'success');
+      }
+    }, 300);
+  } else {
+    container.innerHTML = `<code style="font-size:10px;direction:ltr;word-break:break-all;max-width:200px;display:block">${etaPayload}</code>`;
+  }
+}
+
+function _renderETAQRFromData(invoiceId, qrDataUrl) {
+  const container = document.getElementById('qr-container-' + invoiceId);
+  if (!container || !qrDataUrl) return;
+  container.innerHTML = `<img src="${qrDataUrl}" style="width:120px;height:120px">`;
 }

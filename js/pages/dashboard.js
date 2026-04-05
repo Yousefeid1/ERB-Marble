@@ -26,6 +26,36 @@ function getDashboardSections(role) {
   return sections[role] || ['kpis', 'alerts'];
 }
 
+// ===== حساب معدل دوران المخزون شهرياً =====
+/**
+ * _calcInventoryTurnoverData()
+ * معدل الدوران = تكلفة المبيعات / متوسط قيمة المخزون
+ * يحسب لآخر 6 أشهر ويعيد { labels, values }
+ */
+function _calcInventoryTurnoverData() {
+  const now    = new Date();
+  const labels = [];
+  const values = [];
+
+  for (let i = 5; i >= 0; i--) {
+    const d        = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthKey = d.toISOString().slice(0, 7); // YYYY-MM
+    labels.push(monthKey);
+
+    // COGS لهذا الشهر من فواتير المبيعات
+    const cogs = DB.getAll('sales')
+      .filter(s => (s.invoice_date || '').startsWith(monthKey))
+      .reduce((sum, s) => sum + (s.subtotal || 0), 0);
+
+    // متوسط قيمة المخزون (تقديري من المنتجات)
+    const avgInv = DB.getAll('products')
+      .reduce((sum, p) => sum + (p.stock_qty || 0) * (p.cost || 0), 0);
+
+    values.push(avgInv > 0 ? parseFloat((cogs / avgInv).toFixed(2)) : 0);
+  }
+  return { labels, values };
+}
+
 // ===== جمع جميع التنبيهات الذكية =====
 function collectAllAlerts() {  var alerts  = [];
   var today   = new Date();
@@ -419,6 +449,22 @@ async function renderDashboard() {
         </div>
       </div>
 
+      <!-- KPI Charts: معدل دوران المخزون + نسبة الهالك لكل وردية -->
+      <div class="charts-grid">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🔄 معدل دوران المخزون (شهري)</span>
+          </div>
+          <canvas id="inventory-turnover-chart" height="80"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">♻️ نسبة الهالك لكل وردية</span>
+          </div>
+          <canvas id="waste-per-shift-chart" height="80"></canvas>
+        </div>
+      </div>
+
     <div class="charts-grid">
       <div class="card">
         <div class="card-header"><span class="card-title">🏆 أكثر المنتجات مبيعاً</span></div>
@@ -614,6 +660,67 @@ async function renderDashboard() {
             y: { ticks: { color: '#8892aa' }, grid: { color: 'rgba(42,47,63,0.8)' } }
           }
         }
+      }));
+    }
+
+    // Inventory Turnover Chart — معدل دوران المخزون
+    const invTurnCtx = document.getElementById('inventory-turnover-chart')?.getContext('2d');
+    if (invTurnCtx) {
+      const invTurnData = _calcInventoryTurnoverData();
+      _registerChart('dashboard-inv-turnover', new Chart(invTurnCtx, {
+        type: 'line',
+        data: {
+          labels:   invTurnData.labels,
+          datasets: [{
+            label:           'معدل دوران المخزون',
+            data:            invTurnData.values,
+            borderColor:     '#c8a96e',
+            backgroundColor: 'rgba(200,169,110,0.1)',
+            borderWidth:     2,
+            pointRadius:     4,
+            tension:         0.3,
+            fill:            true,
+          }],
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { labels: { color: '#8892aa', font: { family: 'Cairo' } } } },
+          scales: {
+            x: { ticks: { color: '#8892aa' }, grid: { color: 'rgba(42,47,63,0.6)' } },
+            y: { ticks: { color: '#8892aa' }, grid: { color: 'rgba(42,47,63,0.6)' }, beginAtZero: true },
+          },
+        },
+      }));
+    }
+
+    // Waste Rate Per Shift Chart — نسبة الهالك لكل وردية (دفعة نشر)
+    const wasteShiftCtx = document.getElementById('waste-per-shift-chart')?.getContext('2d');
+    if (wasteShiftCtx) {
+      const cuts   = DB.getAll('cutting').slice(-12).sort((a, b) => new Date(a.date) - new Date(b.date));
+      const wLabels = cuts.map(c => c.batch_number || formatDate(c.date));
+      const wVals   = cuts.map(c => parseFloat((c.waste_percentage || 0).toFixed(1)));
+      _registerChart('dashboard-waste-shift', new Chart(wasteShiftCtx, {
+        type: 'bar',
+        data: {
+          labels:   wLabels,
+          datasets: [{
+            label:           'نسبة الهالك %',
+            data:            wVals,
+            backgroundColor: wVals.map(v => v > 5 ? 'rgba(226,75,74,0.5)' : 'rgba(29,158,117,0.5)'),
+            borderColor:     wVals.map(v => v > 5 ? '#e24b4a' : '#1d9e75'),
+            borderWidth:     1,
+            borderRadius:    4,
+          }],
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { labels: { color: '#8892aa', font: { family: 'Cairo' } } } },
+          scales: {
+            x: { ticks: { color: '#8892aa', font: { size: 10 } }, grid: { color: 'rgba(42,47,63,0.6)' } },
+            y: { ticks: { color: '#8892aa' }, grid: { color: 'rgba(42,47,63,0.6)' }, beginAtZero: true,
+                 title: { display: true, text: '%', color: '#8892aa' } },
+          },
+        },
       }));
     }
 
